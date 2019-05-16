@@ -18,6 +18,7 @@ import (
 	"github.com/grpc-ecosystem/grpc-opentracing/go/otgrpc"
 	opentracing "github.com/opentracing/opentracing-go"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	jaeger "github.com/uber/jaeger-client-go"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/reflection"
@@ -51,9 +52,27 @@ func DefaultHTTPHandler(mux *runtime.ServeMux) http.Handler {
 	return InitSpan(mux)
 }
 
-// DefaultAnnotator - set the X-Request-Id into gRPC context
+// DefaultAnnotator - set the span and footprint into gRPC context
 func DefaultAnnotator(c context.Context, req *http.Request) metadata.MD {
-	return metadata.Pairs("x-request-id", RequestID(req))
+	md, ok := metadata.FromIncomingContext(c)
+	if !ok {
+		md = metadata.New(nil)
+	}
+
+	var footprint string
+	span := opentracing.SpanFromContext(c)
+	if span != nil {
+		footprint = span.BaggageItem("footprint")
+		md.Set(jaeger.TraceBaggageHeaderPrefix+"footprint", footprint)
+		md.Set(jaeger.TraceContextHeaderName, fmt.Sprintf("%+v", span))
+	}
+	if footprint == "" {
+		footprint = RequestID(req)
+	}
+
+	md.Set("x-request-id", footprint)
+
+	return md
 }
 
 // RequestID - get X-Request-Id from http request header, if it does not exist then generate one
