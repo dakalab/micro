@@ -1,7 +1,6 @@
 package micro
 
 import (
-	"context"
 	"io"
 	"net/http"
 
@@ -10,23 +9,6 @@ import (
 	jaeger "github.com/uber/jaeger-client-go"
 	"github.com/uber/jaeger-client-go/config"
 )
-
-type spanKey string
-
-// SpanKey - the key to use to store the span in request context
-var SpanKey = spanKey("span")
-
-// NewChildSpanFromContext - generate a child span with given name if a span is found on the context
-func NewChildSpanFromContext(ctx context.Context, name string) (opentracing.Span, bool) {
-	if span, ok := ctx.Value(SpanKey).(opentracing.Span); ok {
-		var childSpan = opentracing.StartSpan(
-			name,
-			opentracing.ChildOf(span.Context()),
-		)
-		return childSpan, true
-	}
-	return nil, false
-}
 
 // InitSpan - initiate the tracing span and set the http response header with X-Request-Id
 func InitSpan(mux *runtime.ServeMux) http.Handler {
@@ -70,9 +52,8 @@ func InitSpan(mux *runtime.ServeMux) http.Handler {
 		// Set the http response header with X-Request-Id
 		w.Header().Set("X-Request-Id", footprint)
 
-		// We are passing the context as an item in Go context so that
-		// we can use NewChildSpanFromContext to create child spans
-		var ctx = context.WithValue(r.Context(), SpanKey, serverSpan)
+		// We are passing the span as an item in Go context
+		var ctx = opentracing.ContextWithSpan(r.Context(), serverSpan)
 
 		mux.ServeHTTP(w, r.WithContext(ctx))
 
