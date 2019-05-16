@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/grpc-ecosystem/grpc-gateway/runtime"
+	opentracing "github.com/opentracing/opentracing-go"
 	"github.com/stretchr/testify/assert"
 	"google.golang.org/grpc"
 )
@@ -33,6 +34,9 @@ func init() {
 }
 
 func TestNewService(t *testing.T) {
+
+	closer, _ := InitJaeger("micro", "localhost:6831", "localhost:6831")
+	defer closer.Close()
 
 	redoc := &RedocOpts{
 		Up: true,
@@ -102,6 +106,24 @@ func TestNewService(t *testing.T) {
 	}
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 	assert.Len(t, resp.Header.Get("X-Request-Id"), 36)
+
+	// create a root span and set Uber-Trace-Id in header
+	rootSpan := opentracing.StartSpan("root")
+	defer rootSpan.Finish()
+	client = &http.Client{}
+	req, err := http.NewRequest("GET", fmt.Sprintf("http://127.0.0.1:%d/", httpPort), nil)
+	if err != nil {
+		t.Error(err)
+	}
+	footprint := "1234567890"
+	req.Header.Set("uber-trace-id", fmt.Sprintf("%+v", rootSpan))
+	req.Header.Set("uberctx-footprint", footprint)
+	resp, err = client.Do(req)
+	if err != nil {
+		t.Error(err)
+	}
+	assert.Equal(t, http.StatusNotFound, resp.StatusCode)
+	assert.Equal(t, footprint, resp.Header.Get("X-Request-Id"))
 
 	// another service
 	s2 := NewService(

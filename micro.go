@@ -46,12 +46,9 @@ type HTTPHandlerFunc func(mux *runtime.ServeMux) http.Handler
 // AnnotatorFunc - annotator function is for injecting meta data from http request into gRPC context
 type AnnotatorFunc func(context.Context, *http.Request) metadata.MD
 
-// DefaultHTTPHandler - default http handler which will set the http response header with X-Request-Id
+// DefaultHTTPHandler - default http handler which will initiate the tracing span and set the http response header with X-Request-Id
 func DefaultHTTPHandler(mux *runtime.ServeMux) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("X-Request-Id", RequestID(r))
-		mux.ServeHTTP(w, r)
-	})
+	return InitSpan(mux)
 }
 
 // DefaultAnnotator - set the X-Request-Id into gRPC context
@@ -196,7 +193,7 @@ func (s *Service) startGrpcGateway(httpPort uint16, grpcPort uint16, reverseProx
 	}
 
 	// this is the fallback handler that will serve static files,
-	// if file not exists, then a 404 error will be returned.
+	// if file does not exist, then a 404 error will be returned.
 	patternFallback := runtime.MustPattern(runtime.NewPattern(1, []int{int(utilities.OpPush), 0}, []string{""}, ""))
 	s.Mux.Handle("GET", patternFallback, func(w http.ResponseWriter, r *http.Request, pathParams map[string]string) {
 		dir := s.StaticDir
