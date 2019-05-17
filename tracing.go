@@ -1,7 +1,9 @@
 package micro
 
 import (
+	"fmt"
 	"io"
+	"log"
 	"net/http"
 
 	"github.com/grpc-ecosystem/grpc-gateway/runtime"
@@ -14,6 +16,7 @@ import (
 func InitSpan(mux *runtime.ServeMux) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var serverSpan opentracing.Span
+
 		// Extracting B3 tracing context from the request.
 		// This step is important to extract the actual request context from outside of the applications.
 		// By default, Jaeger use "uber-trace-id" to propagate tracing context,
@@ -26,10 +29,17 @@ func InitSpan(mux *runtime.ServeMux) http.Handler {
 		// We will be using method name as the span name (method above)
 		var methodName = r.Method + " " + r.URL.Path
 		if err != nil {
-			// Found no span in headers, start a new span as a parent span
+			// Found no span in headers, start a new span as root span
+			log.Printf("Found no span in headers. Error: " + err.Error())
+			for k, h := range r.Header {
+				for _, v := range h {
+					log.Printf(fmt.Sprintf("Header: %s - %s", k, v))
+				}
+			}
 			serverSpan = opentracing.StartSpan(methodName)
 		} else {
 			// Create span as a child of parent context
+			log.Printf("Attaching span, Starting child span: " + methodName)
 			serverSpan = opentracing.StartSpan(
 				methodName,
 				opentracing.ChildOf(wireContext),
@@ -42,9 +52,11 @@ func InitSpan(mux *runtime.ServeMux) http.Handler {
 
 		var footprint string
 		if footprint = serverSpan.BaggageItem("footprint"); footprint != "" {
+			log.Printf("Find baggage item footprint in span: " + footprint)
 			serverSpan.SetTag("footprint", footprint)
 		} else {
 			footprint = RequestID(r)
+			log.Printf("No baggage item footprint found in span, try to get from X-Request-Id: " + footprint)
 			serverSpan.SetBaggageItem("footprint", footprint)
 			serverSpan.SetTag("footprint", footprint)
 		}
@@ -53,6 +65,7 @@ func InitSpan(mux *runtime.ServeMux) http.Handler {
 		w.Header().Set("X-Request-Id", footprint)
 
 		// We are passing the span as an item in Go context
+		log.Printf(fmt.Sprintf("Passing span into context: %+v", serverSpan))
 		var ctx = opentracing.ContextWithSpan(r.Context(), serverSpan)
 
 		mux.ServeHTTP(w, r.WithContext(ctx))

@@ -52,19 +52,24 @@ func DefaultHTTPHandler(mux *runtime.ServeMux) http.Handler {
 	return InitSpan(mux)
 }
 
-// DefaultAnnotator - set the span and footprint into gRPC context
-func DefaultAnnotator(c context.Context, req *http.Request) metadata.MD {
-	md, ok := metadata.FromIncomingContext(c)
+// DefaultAnnotator - set the root span and footprint into gRPC context
+func DefaultAnnotator(ctx context.Context, req *http.Request) metadata.MD {
+	md, ok := metadata.FromIncomingContext(ctx)
 	if !ok {
 		md = metadata.New(nil)
 	}
 
 	var footprint string
-	span := opentracing.SpanFromContext(c)
+	span := opentracing.SpanFromContext(ctx)
 	if span != nil {
 		footprint = span.BaggageItem("footprint")
 		md.Set(jaeger.TraceBaggageHeaderPrefix+"footprint", footprint)
-		md.Set(jaeger.TraceContextHeaderName, fmt.Sprintf("%+v", span))
+		// IMPORTANT, otherwise the gRPC service will create a root span instead of a child span
+		childSpan := opentracing.StartSpan(
+			"child", // this name will be replaced with actual rpc name in the open tracing interceptor
+			opentracing.ChildOf(span.Context()),
+		)
+		md.Set(jaeger.TraceContextHeaderName, fmt.Sprintf("%+v", childSpan))
 	}
 	if footprint == "" {
 		footprint = RequestID(req)
@@ -99,18 +104,26 @@ func NewService(
 		Redoc: redoc,
 	}
 
+	// default tracer is NoopTracer, you need to use an acutal tracer for tracing
 	tracer := opentracing.GlobalTracer()
 
 	s.streamInterceptors = []grpc.StreamServerInterceptor{}
-	s.streamInterceptors = append(s.streamInterceptors, grpc_prometheus.StreamServerInterceptor)
-	s.streamInterceptors = append(s.streamInterceptors, grpc_validator.StreamServerInterceptor())
-	s.streamInterceptors = append(s.streamInterceptors, otgrpc.OpenTracingStreamServerInterceptor(tracer))
-	s.streamInterceptors = append(s.streamInterceptors, streamInterceptors...)
-
 	s.unaryInterceptors = []grpc.UnaryServerInterceptor{}
+
+	// install open tracing interceptor
+	s.streamInterceptors = append(s.streamInterceptors, otgrpc.OpenTracingStreamServerInterceptor(tracer, otgrpc.LogPayloads()))
+	s.unaryInterceptors = append(s.unaryInterceptors, otgrpc.OpenTracingServerInterceptor(tracer, otgrpc.LogPayloads()))
+
+	// install prometheus interceptor
+	s.streamInterceptors = append(s.streamInterceptors, grpc_prometheus.StreamServerInterceptor)
 	s.unaryInterceptors = append(s.unaryInterceptors, grpc_prometheus.UnaryServerInterceptor)
+
+	// install validator interceptor
+	s.streamInterceptors = append(s.streamInterceptors, grpc_validator.StreamServerInterceptor())
 	s.unaryInterceptors = append(s.unaryInterceptors, grpc_validator.UnaryServerInterceptor())
-	s.unaryInterceptors = append(s.unaryInterceptors, otgrpc.OpenTracingServerInterceptor(tracer))
+
+	// install customized interceptors from parameters
+	s.streamInterceptors = append(s.streamInterceptors, streamInterceptors...)
 	s.unaryInterceptors = append(s.unaryInterceptors, unaryInterceptors...)
 
 	// install panic handler
@@ -160,10 +173,6 @@ func (s *Service) startGrpcServer(grpcPort uint16) error {
 }
 
 func (s *Service) startGrpcGateway(httpPort uint16, grpcPort uint16, reverseProxyFunc ReverseProxyFunc) error {
-	ctx := context.Background()
-	ctx, cancel := context.WithCancel(ctx)
-	defer cancel()
-
 	if s.ErrorHandler == nil {
 		s.ErrorHandler = runtime.DefaultHTTPError
 	}
@@ -206,7 +215,7 @@ func (s *Service) startGrpcGateway(httpPort uint16, grpcPort uint16, reverseProx
 		})
 	}
 
-	err := reverseProxyFunc(ctx, s.Mux, fmt.Sprintf("localhost:%d", grpcPort), opts)
+	err := reverseProxyFunc(context.Background(), s.Mux, fmt.Sprintf("localhost:%d", grpcPort), opts)
 	if err != nil {
 		return err
 	}

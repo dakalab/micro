@@ -36,7 +36,9 @@ func init() {
 func TestNewService(t *testing.T) {
 
 	closer, _ := InitJaeger("micro", "localhost:6831", "localhost:6831")
-	defer closer.Close()
+	if closer != nil {
+		defer closer.Close()
+	}
 
 	redoc := &RedocOpts{
 		Up: true,
@@ -107,9 +109,8 @@ func TestNewService(t *testing.T) {
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 	assert.Len(t, resp.Header.Get("X-Request-Id"), 36)
 
-	// create a root span and set Uber-Trace-Id in header
+	// create a root span and set uber-trace-id in header
 	rootSpan := opentracing.StartSpan("root")
-	defer rootSpan.Finish()
 	client = &http.Client{}
 	req, err := http.NewRequest("GET", fmt.Sprintf("http://127.0.0.1:%d/", httpPort), nil)
 	if err != nil {
@@ -124,6 +125,7 @@ func TestNewService(t *testing.T) {
 	}
 	assert.Equal(t, http.StatusNotFound, resp.StatusCode)
 	assert.Equal(t, footprint, resp.Header.Get("X-Request-Id"))
+	rootSpan.Finish()
 
 	// another service
 	s2 := NewService(
