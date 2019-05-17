@@ -1,9 +1,7 @@
 package micro
 
 import (
-	"fmt"
 	"io"
-	"log"
 	"net/http"
 
 	"github.com/grpc-ecosystem/grpc-gateway/runtime"
@@ -30,16 +28,16 @@ func InitSpan(mux *runtime.ServeMux) http.Handler {
 		var methodName = r.Method + " " + r.URL.Path
 		if err != nil {
 			// Found no span in headers, start a new span as root span
-			log.Printf("Found no span in headers. Error: " + err.Error())
+			logger.Infof(err.Error())
 			for k, h := range r.Header {
 				for _, v := range h {
-					log.Printf(fmt.Sprintf("Header: %s - %s", k, v))
+					logger.Infof("Header: %s - %s", k, v)
 				}
 			}
 			serverSpan = opentracing.StartSpan(methodName)
 		} else {
 			// Create span as a child of parent context
-			log.Printf("Attaching span, Starting child span: " + methodName)
+			logger.Infof("Found parent span, start a child span: " + methodName)
 			serverSpan = opentracing.StartSpan(
 				methodName,
 				opentracing.ChildOf(wireContext),
@@ -52,11 +50,11 @@ func InitSpan(mux *runtime.ServeMux) http.Handler {
 
 		var footprint string
 		if footprint = serverSpan.BaggageItem("footprint"); footprint != "" {
-			log.Printf("Find baggage item footprint in span: " + footprint)
+			logger.Infof("Found baggage item footprint in span: " + footprint)
 			serverSpan.SetTag("footprint", footprint)
 		} else {
 			footprint = RequestID(r)
-			log.Printf("No baggage item footprint found in span, try to get from X-Request-Id: " + footprint)
+			logger.Infof("No baggage item footprint found in span, try to get from X-Request-Id: " + footprint)
 			serverSpan.SetBaggageItem("footprint", footprint)
 			serverSpan.SetTag("footprint", footprint)
 		}
@@ -65,7 +63,7 @@ func InitSpan(mux *runtime.ServeMux) http.Handler {
 		w.Header().Set("X-Request-Id", footprint)
 
 		// We are passing the span as an item in Go context
-		log.Printf(fmt.Sprintf("Passing span into context: %+v", serverSpan))
+		logger.Infof("Passing span into context: %+v", serverSpan)
 		var ctx = opentracing.ContextWithSpan(r.Context(), serverSpan)
 
 		mux.ServeHTTP(w, r.WithContext(ctx))

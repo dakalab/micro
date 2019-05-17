@@ -46,9 +46,8 @@ func TestNewService(t *testing.T) {
 	redoc.AddSpec("PetStore", "https://rebilly.github.io/ReDoc/swagger.yaml")
 
 	s := NewService(
-		[]grpc.StreamServerInterceptor{},
-		[]grpc.UnaryServerInterceptor{},
-		redoc,
+		Redoc(redoc),
+		Debug(),
 	)
 
 	go func() {
@@ -129,11 +128,9 @@ func TestNewService(t *testing.T) {
 
 	// another service
 	s2 := NewService(
-		[]grpc.StreamServerInterceptor{},
-		[]grpc.UnaryServerInterceptor{},
-		&RedocOpts{
+		Redoc(&RedocOpts{
 			Up: false,
-		},
+		}),
 	)
 
 	// http port 8888 already in use
@@ -149,11 +146,9 @@ func TestNewService(t *testing.T) {
 
 	// run a new service again
 	s = NewService(
-		[]grpc.StreamServerInterceptor{},
-		[]grpc.UnaryServerInterceptor{},
-		&RedocOpts{
+		Redoc(&RedocOpts{
 			Up: false,
-		},
+		}),
 	)
 	go func() {
 		if err := s.Start(httpPort, grpcPort, reverseProxyFunc); err != nil {
@@ -175,11 +170,9 @@ func TestNewService(t *testing.T) {
 
 func TestErrorReverseProxyFunc(t *testing.T) {
 	s := NewService(
-		[]grpc.StreamServerInterceptor{},
-		[]grpc.UnaryServerInterceptor{},
-		&RedocOpts{
+		Redoc(&RedocOpts{
 			Up: true,
-		},
+		}),
 	)
 
 	// mock error from reverseProxyFunc
@@ -198,11 +191,15 @@ func TestErrorReverseProxyFunc(t *testing.T) {
 }
 
 func TestDefaultAnnotator(t *testing.T) {
-	ctx := context.TODO()
+	span := opentracing.StartSpan("root")
+	ctx := opentracing.ContextWithSpan(context.TODO(), span)
+
 	req := httptest.NewRequest("GET", "/", nil)
 	req.Header.Set("X-Request-Id", "uuid")
+
 	md := DefaultAnnotator(ctx, req)
 	id, ok := md["x-request-id"]
+
 	assert.True(t, ok)
 	assert.Equal(t, "uuid", id[0])
 }

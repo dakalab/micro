@@ -26,23 +26,24 @@ import (
 
 // Service - to represent the microservice
 type Service struct {
-	GRPCServer         *grpc.Server
-	HTTPServer         *http.Server
-	Mux                *runtime.ServeMux
-	HTTPHandler        HTTPHandlerFunc
-	ErrorHandler       runtime.ProtoErrorHandlerFunc
-	Annotators         []AnnotatorFunc
-	Redoc              *RedocOpts
+	grpcServer         *grpc.Server
+	httpServer         *http.Server
+	httpHandler        HTTPHandlerFunc
+	errorHandler       runtime.ProtoErrorHandlerFunc
+	annotators         []AnnotatorFunc
+	redoc              *RedocOpts
+	staticDir          string
+	mux                *runtime.ServeMux
 	streamInterceptors []grpc.StreamServerInterceptor
 	unaryInterceptors  []grpc.UnaryServerInterceptor
-	StaticDir          string
+	debug              bool
 }
 
 // ReverseProxyFunc - a callback that the caller should implement to steps to reverse-proxy the HTTP/1 requests to gRPC
 type ReverseProxyFunc func(ctx context.Context, mux *runtime.ServeMux, grpcHostAndPort string, opts []grpc.DialOption) error
 
-// HTTPHandlerFunc - http handler function
-type HTTPHandlerFunc func(mux *runtime.ServeMux) http.Handler
+// HTTPHandlerFunc - http middleware handler function
+type HTTPHandlerFunc func(*runtime.ServeMux) http.Handler
 
 // AnnotatorFunc - annotator function is for injecting meta data from http request into gRPC context
 type AnnotatorFunc func(context.Context, *http.Request) metadata.MD
@@ -52,7 +53,7 @@ func DefaultHTTPHandler(mux *runtime.ServeMux) http.Handler {
 	return InitSpan(mux)
 }
 
-// DefaultAnnotator - set the root span and footprint into gRPC context
+// DefaultAnnotator - pass span info into gRPC context
 func DefaultAnnotator(ctx context.Context, req *http.Request) metadata.MD {
 	md, ok := metadata.FromIncomingContext(ctx)
 	if !ok {
@@ -94,15 +95,11 @@ func RequestID(req *http.Request) string {
 	return id
 }
 
-// NewService - create a new microservice
-func NewService(
-	streamInterceptors []grpc.StreamServerInterceptor,
-	unaryInterceptors []grpc.UnaryServerInterceptor,
-	redoc *RedocOpts,
-) *Service {
-	s := Service{
-		Redoc: redoc,
-	}
+func defaultService() *Service {
+	s := Service{}
+	s.annotators = append(s.annotators, DefaultAnnotator)
+	s.errorHandler = runtime.DefaultHTTPError
+	s.httpHandler = DefaultHTTPHandler
 
 	// default tracer is NoopTracer, you need to use an acutal tracer for tracing
 	tracer := opentracing.GlobalTracer()
@@ -122,20 +119,29 @@ func NewService(
 	s.streamInterceptors = append(s.streamInterceptors, grpc_validator.StreamServerInterceptor())
 	s.unaryInterceptors = append(s.unaryInterceptors, grpc_validator.UnaryServerInterceptor())
 
-	// install customized interceptors from parameters
-	s.streamInterceptors = append(s.streamInterceptors, streamInterceptors...)
-	s.unaryInterceptors = append(s.unaryInterceptors, unaryInterceptors...)
-
 	// install panic handler
 	s.streamInterceptors = append(s.streamInterceptors, StreamPanicHandler)
 	s.unaryInterceptors = append(s.unaryInterceptors, UnaryPanicHandler)
 
-	s.GRPCServer = grpc.NewServer(
+	return &s
+}
+
+// NewService - create a new microservice
+func NewService(opts ...Option) *Service {
+	s := defaultService()
+
+	s.apply(opts...)
+
+	if s.debug {
+		logger = jaeger.StdLogger
+	}
+
+	s.grpcServer = grpc.NewServer(
 		grpc_middleware.WithStreamServerChain(s.streamInterceptors...),
 		grpc_middleware.WithUnaryServerChain(s.unaryInterceptors...),
 	)
 
-	return &s
+	return s
 }
 
 // Start - start the microservice with listening on the ports
@@ -158,10 +164,10 @@ func (s *Service) Start(httpPort uint16, grpcPort uint16, reverseProxyFunc Rever
 
 func (s *Service) startGrpcServer(grpcPort uint16) error {
 	// setup /metrics for prometheus
-	grpc_prometheus.Register(s.GRPCServer)
+	grpc_prometheus.Register(s.grpcServer)
 
 	// register reflection service on gRPC server.
-	reflection.Register(s.GRPCServer)
+	reflection.Register(s.grpcServer)
 
 	grpcHost := fmt.Sprintf(":%d", grpcPort)
 	lis, err := net.Listen("tcp", grpcHost)
@@ -169,53 +175,39 @@ func (s *Service) startGrpcServer(grpcPort uint16) error {
 		return err
 	}
 
-	return s.GRPCServer.Serve(lis)
+	return s.grpcServer.Serve(lis)
 }
 
 func (s *Service) startGrpcGateway(httpPort uint16, grpcPort uint16, reverseProxyFunc ReverseProxyFunc) error {
-	if s.ErrorHandler == nil {
-		s.ErrorHandler = runtime.DefaultHTTPError
-	}
-
-	if s.Annotators == nil || len(s.Annotators) == 0 {
-		s.Annotators = append(s.Annotators, DefaultAnnotator)
-	}
 	var muxOptions []runtime.ServeMuxOption
 	muxOptions = append(muxOptions, runtime.WithMarshalerOption(
 		runtime.MIMEWildcard,
 		&runtime.JSONPb{OrigName: true, EmitDefaults: true},
 	))
-	muxOptions = append(muxOptions, runtime.WithProtoErrorHandler(s.ErrorHandler))
+	muxOptions = append(muxOptions, runtime.WithProtoErrorHandler(s.errorHandler))
 
-	for _, annotator := range s.Annotators {
+	for _, annotator := range s.annotators {
 		muxOptions = append(muxOptions, runtime.WithMetadata(annotator))
 	}
 
-	if s.Mux == nil { // set a default mux
-		s.Mux = runtime.NewServeMux(muxOptions...)
-	}
-
-	if s.HTTPHandler == nil { // set a default http handler
-		s.HTTPHandler = DefaultHTTPHandler
-	}
-
-	opts := []grpc.DialOption{grpc.WithInsecure()}
+	s.mux = runtime.NewServeMux(muxOptions...)
 
 	// configure /metrics HTTP/1 endpoint
 	patternMetrics := runtime.MustPattern(runtime.NewPattern(1, []int{int(utilities.OpLitPush), 0}, []string{"metrics"}, ""))
-	s.Mux.Handle("GET", patternMetrics, func(w http.ResponseWriter, r *http.Request, pathParams map[string]string) {
+	s.mux.Handle("GET", patternMetrics, func(w http.ResponseWriter, r *http.Request, pathParams map[string]string) {
 		promhttp.Handler().ServeHTTP(w, r)
 	})
 
-	if s.Redoc.Up {
+	if s.redoc.Up {
 		// configure /docs HTTP/1 endpoint
 		patternRedoc := runtime.MustPattern(runtime.NewPattern(1, []int{int(utilities.OpLitPush), 0}, []string{"docs"}, ""))
-		s.Mux.Handle("GET", patternRedoc, func(w http.ResponseWriter, r *http.Request, pathParams map[string]string) {
-			s.Redoc.Serve(w, r, pathParams)
+		s.mux.Handle("GET", patternRedoc, func(w http.ResponseWriter, r *http.Request, pathParams map[string]string) {
+			s.redoc.Serve(w, r, pathParams)
 		})
 	}
 
-	err := reverseProxyFunc(context.Background(), s.Mux, fmt.Sprintf("localhost:%d", grpcPort), opts)
+	opts := []grpc.DialOption{grpc.WithInsecure()}
+	err := reverseProxyFunc(context.Background(), s.mux, fmt.Sprintf("localhost:%d", grpcPort), opts)
 	if err != nil {
 		return err
 	}
@@ -223,9 +215,9 @@ func (s *Service) startGrpcGateway(httpPort uint16, grpcPort uint16, reverseProx
 	// this is the fallback handler that will serve static files,
 	// if file does not exist, then a 404 error will be returned.
 	patternFallback := runtime.MustPattern(runtime.NewPattern(1, []int{int(utilities.OpPush), 0}, []string{""}, ""))
-	s.Mux.Handle("GET", patternFallback, func(w http.ResponseWriter, r *http.Request, pathParams map[string]string) {
-		dir := s.StaticDir
-		if s.StaticDir == "" {
+	s.mux.Handle("GET", patternFallback, func(w http.ResponseWriter, r *http.Request, pathParams map[string]string) {
+		dir := s.staticDir
+		if s.staticDir == "" {
 			dir, _ = os.Getwd()
 		}
 
@@ -239,16 +231,16 @@ func (s *Service) startGrpcGateway(httpPort uint16, grpcPort uint16, reverseProx
 		http.ServeFile(w, r, path)
 	})
 
-	s.HTTPServer = &http.Server{
+	s.httpServer = &http.Server{
 		Addr:    fmt.Sprintf(":%d", httpPort),
-		Handler: handlers.RecoveryHandler()(s.HTTPHandler(s.Mux)),
+		Handler: handlers.RecoveryHandler()(s.httpHandler(s.mux)),
 	}
 
-	return s.HTTPServer.ListenAndServe()
+	return s.httpServer.ListenAndServe()
 }
 
 // Stop - stop the microservice
 func (s *Service) Stop() {
-	s.GRPCServer.Stop()
-	s.HTTPServer.Shutdown(context.Background())
+	s.grpcServer.Stop()
+	s.httpServer.Shutdown(context.Background())
 }
