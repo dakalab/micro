@@ -101,15 +101,8 @@ func defaultService() *Service {
 	s.errorHandler = runtime.DefaultHTTPError
 	s.httpHandler = DefaultHTTPHandler
 
-	// default tracer is NoopTracer, you need to use an acutal tracer for tracing
-	tracer := opentracing.GlobalTracer()
-
 	s.streamInterceptors = []grpc.StreamServerInterceptor{}
 	s.unaryInterceptors = []grpc.UnaryServerInterceptor{}
-
-	// install open tracing interceptor
-	s.streamInterceptors = append(s.streamInterceptors, otgrpc.OpenTracingStreamServerInterceptor(tracer, otgrpc.LogPayloads()))
-	s.unaryInterceptors = append(s.unaryInterceptors, otgrpc.OpenTracingServerInterceptor(tracer, otgrpc.LogPayloads()))
 
 	// install prometheus interceptor
 	s.streamInterceptors = append(s.streamInterceptors, grpc_prometheus.StreamServerInterceptor)
@@ -132,8 +125,17 @@ func NewService(opts ...Option) *Service {
 
 	s.apply(opts...)
 
+	// default tracer is NoopTracer, you need to use an acutal tracer for tracing
+	tracer := opentracing.GlobalTracer()
+
+	// install open tracing interceptor
 	if s.debug {
 		logger = jaeger.StdLogger
+		s.streamInterceptors = append(s.streamInterceptors, otgrpc.OpenTracingStreamServerInterceptor(tracer, otgrpc.LogPayloads()))
+		s.unaryInterceptors = append(s.unaryInterceptors, otgrpc.OpenTracingServerInterceptor(tracer, otgrpc.LogPayloads()))
+	} else {
+		s.streamInterceptors = append(s.streamInterceptors, otgrpc.OpenTracingStreamServerInterceptor(tracer))
+		s.unaryInterceptors = append(s.unaryInterceptors, otgrpc.OpenTracingServerInterceptor(tracer))
 	}
 
 	s.GRPCServer = grpc.NewServer(
