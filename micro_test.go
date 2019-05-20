@@ -35,7 +35,7 @@ func init() {
 
 func TestNewService(t *testing.T) {
 
-	closer, _ := InitJaeger("micro", "localhost:6831", "localhost:6831")
+	closer, _ := InitJaeger("micro", "localhost:6831", "localhost:6831", true)
 	if closer != nil {
 		defer closer.Close()
 	}

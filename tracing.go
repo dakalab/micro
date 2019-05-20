@@ -73,8 +73,9 @@ func InitSpan(mux *runtime.ServeMux) http.Handler {
 	})
 }
 
-// InitJaeger - initiate an instance of Jaeger Tracer as global tracer
-func InitJaeger(service, samplingServerURL, localAgentHost string) (io.Closer, error) {
+// InitJaeger - helper to initiate an instance of Jaeger Tracer as global tracer, if you need to
+// customize your tracer, you can do it yourself instead of calling this function
+func InitJaeger(service, samplingServerURL, localAgentHost string, debug bool) (io.Closer, error) {
 	cfg := &config.Configuration{
 		Sampler: &config.SamplerConfig{
 			Type:              jaeger.SamplerTypeConst,
@@ -87,5 +88,10 @@ func InitJaeger(service, samplingServerURL, localAgentHost string) (io.Closer, e
 		},
 	}
 
-	return cfg.InitGlobalTracer(service, config.Logger(jaeger.StdLogger), config.ZipkinSharedRPCSpan(true))
+	l := config.Logger(jaeger.NullLogger)
+	if debug { // only log to stdout in debug mode
+		l = config.Logger(jaeger.StdLogger)
+	}
+
+	return cfg.InitGlobalTracer(service, l, config.ZipkinSharedRPCSpan(true))
 }
