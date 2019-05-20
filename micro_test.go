@@ -134,11 +134,11 @@ func TestNewService(t *testing.T) {
 	)
 
 	// http port 8888 already in use
-	err = s2.startGrpcGateway(httpPort, grpcPort, reverseProxyFunc)
+	err = s2.startGRPCGateway(httpPort, grpcPort, reverseProxyFunc)
 	assert.Error(t, err)
 
 	// grpc port 9999 alreday in use
-	err = s2.startGrpcServer(grpcPort)
+	err = s2.startGRPCServer(grpcPort)
 	assert.Error(t, err)
 
 	// stop the first server
@@ -186,7 +186,7 @@ func TestErrorReverseProxyFunc(t *testing.T) {
 		return errors.New(errText)
 	}
 
-	err := s.startGrpcGateway(httpPort, grpcPort, reverseProxyFunc)
+	err := s.startGRPCGateway(httpPort, grpcPort, reverseProxyFunc)
 	assert.EqualError(t, err, errText)
 }
 

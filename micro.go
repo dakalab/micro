@@ -26,8 +26,8 @@ import (
 
 // Service - to represent the microservice
 type Service struct {
-	grpcServer         *grpc.Server
-	httpServer         *http.Server
+	GRPCServer         *grpc.Server
+	HTTPServer         *http.Server
 	httpHandler        HTTPHandlerFunc
 	errorHandler       runtime.ProtoErrorHandlerFunc
 	annotators         []AnnotatorFunc
@@ -136,7 +136,7 @@ func NewService(opts ...Option) *Service {
 		logger = jaeger.StdLogger
 	}
 
-	s.grpcServer = grpc.NewServer(
+	s.GRPCServer = grpc.NewServer(
 		grpc_middleware.WithStreamServerChain(s.streamInterceptors...),
 		grpc_middleware.WithUnaryServerChain(s.unaryInterceptors...),
 	)
@@ -151,23 +151,23 @@ func (s *Service) Start(httpPort uint16, grpcPort uint16, reverseProxyFunc Rever
 
 	// start HTTP/1.0 gateway server
 	go func() {
-		errChan <- s.startGrpcGateway(httpPort, grpcPort, reverseProxyFunc)
+		errChan <- s.startGRPCGateway(httpPort, grpcPort, reverseProxyFunc)
 	}()
 
 	// start gRPC server
 	go func() {
-		errChan <- s.startGrpcServer(grpcPort)
+		errChan <- s.startGRPCServer(grpcPort)
 	}()
 
 	return <-errChan
 }
 
-func (s *Service) startGrpcServer(grpcPort uint16) error {
+func (s *Service) startGRPCServer(grpcPort uint16) error {
 	// setup /metrics for prometheus
-	grpc_prometheus.Register(s.grpcServer)
+	grpc_prometheus.Register(s.GRPCServer)
 
 	// register reflection service on gRPC server.
-	reflection.Register(s.grpcServer)
+	reflection.Register(s.GRPCServer)
 
 	grpcHost := fmt.Sprintf(":%d", grpcPort)
 	lis, err := net.Listen("tcp", grpcHost)
@@ -175,10 +175,10 @@ func (s *Service) startGrpcServer(grpcPort uint16) error {
 		return err
 	}
 
-	return s.grpcServer.Serve(lis)
+	return s.GRPCServer.Serve(lis)
 }
 
-func (s *Service) startGrpcGateway(httpPort uint16, grpcPort uint16, reverseProxyFunc ReverseProxyFunc) error {
+func (s *Service) startGRPCGateway(httpPort uint16, grpcPort uint16, reverseProxyFunc ReverseProxyFunc) error {
 	var muxOptions []runtime.ServeMuxOption
 	muxOptions = append(muxOptions, runtime.WithMarshalerOption(
 		runtime.MIMEWildcard,
@@ -231,16 +231,16 @@ func (s *Service) startGrpcGateway(httpPort uint16, grpcPort uint16, reverseProx
 		http.ServeFile(w, r, path)
 	})
 
-	s.httpServer = &http.Server{
+	s.HTTPServer = &http.Server{
 		Addr:    fmt.Sprintf(":%d", httpPort),
 		Handler: handlers.RecoveryHandler()(s.httpHandler(s.mux)),
 	}
 
-	return s.httpServer.ListenAndServe()
+	return s.HTTPServer.ListenAndServe()
 }
 
 // Stop - stop the microservice
 func (s *Service) Stop() {
-	s.grpcServer.Stop()
-	s.httpServer.Shutdown(context.Background())
+	s.GRPCServer.Stop()
+	s.HTTPServer.Shutdown(context.Background())
 }
