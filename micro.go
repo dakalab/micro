@@ -14,7 +14,6 @@ import (
 	grpc_validator "github.com/grpc-ecosystem/go-grpc-middleware/validator"
 	grpc_prometheus "github.com/grpc-ecosystem/go-grpc-prometheus"
 	"github.com/grpc-ecosystem/grpc-gateway/runtime"
-	"github.com/grpc-ecosystem/grpc-gateway/utilities"
 	"github.com/grpc-ecosystem/grpc-opentracing/go/otgrpc"
 	opentracing "github.com/opentracing/opentracing-go"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -195,15 +194,13 @@ func (s *Service) startGRPCGateway(httpPort uint16, grpcPort uint16, reverseProx
 	s.mux = runtime.NewServeMux(muxOptions...)
 
 	// configure /metrics HTTP/1 endpoint
-	patternMetrics := runtime.MustPattern(runtime.NewPattern(1, []int{int(utilities.OpLitPush), 0}, []string{"metrics"}, ""))
-	s.mux.Handle("GET", patternMetrics, func(w http.ResponseWriter, r *http.Request, pathParams map[string]string) {
+	s.mux.Handle("GET", PathPattern("metrics"), func(w http.ResponseWriter, r *http.Request, pathParams map[string]string) {
 		promhttp.Handler().ServeHTTP(w, r)
 	})
 
 	if s.redoc.Up {
 		// configure /docs HTTP/1 endpoint
-		patternRedoc := runtime.MustPattern(runtime.NewPattern(1, []int{int(utilities.OpLitPush), 0}, []string{"docs"}, ""))
-		s.mux.Handle("GET", patternRedoc, func(w http.ResponseWriter, r *http.Request, pathParams map[string]string) {
+		s.mux.Handle("GET", PathPattern("docs"), func(w http.ResponseWriter, r *http.Request, pathParams map[string]string) {
 			s.redoc.Serve(w, r, pathParams)
 		})
 	}
@@ -216,8 +213,7 @@ func (s *Service) startGRPCGateway(httpPort uint16, grpcPort uint16, reverseProx
 
 	// this is the fallback handler that will serve static files,
 	// if file does not exist, then a 404 error will be returned.
-	patternFallback := runtime.MustPattern(runtime.NewPattern(1, []int{int(utilities.OpPush), 0}, []string{""}, ""))
-	s.mux.Handle("GET", patternFallback, func(w http.ResponseWriter, r *http.Request, pathParams map[string]string) {
+	s.mux.Handle("GET", AllPattern(), func(w http.ResponseWriter, r *http.Request, pathParams map[string]string) {
 		dir := s.staticDir
 		if s.staticDir == "" {
 			dir, _ = os.Getwd()
