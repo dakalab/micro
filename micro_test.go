@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io/ioutil"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -41,13 +42,24 @@ func TestNewService(t *testing.T) {
 	}
 
 	redoc := &RedocOpts{
-		Up: true,
+		Route: "docs",
+		Up:    true,
 	}
 	redoc.AddSpec("PetStore", "https://rebilly.github.io/ReDoc/swagger.yaml")
+
+	// add the /test endpoint
+	route := Route{
+		Method:  "GET",
+		Pattern: PathPattern("test"),
+		Handler: func(w http.ResponseWriter, r *http.Request, pathParams map[string]string) {
+			w.Write([]byte("Hello!"))
+		},
+	}
 
 	s := NewService(
 		Redoc(redoc),
 		Debug(),
+		RouteOpt(route),
 	)
 
 	go func() {
@@ -111,7 +123,7 @@ func TestNewService(t *testing.T) {
 	// create a root span and set uber-trace-id in header
 	rootSpan := opentracing.StartSpan("root")
 	client = &http.Client{}
-	req, err := http.NewRequest("GET", fmt.Sprintf("http://127.0.0.1:%d/", httpPort), nil)
+	req, err := http.NewRequest("GET", fmt.Sprintf("http://127.0.0.1:%d/test", httpPort), nil)
 	if err != nil {
 		t.Error(err)
 	}
@@ -122,8 +134,11 @@ func TestNewService(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	assert.Equal(t, http.StatusNotFound, resp.StatusCode)
+	defer resp.Body.Close()
+	body, _ := ioutil.ReadAll(resp.Body)
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
 	assert.Equal(t, footprint, resp.Header.Get("X-Request-Id"))
+	assert.Equal(t, "Hello!", string(body))
 	rootSpan.Finish()
 
 	// another service

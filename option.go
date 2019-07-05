@@ -67,6 +67,13 @@ func StreamInterceptor(streamInterceptor grpc.StreamServerInterceptor) Option {
 	}
 }
 
+// RouteOpt - return an Option to append a route
+func RouteOpt(route Route) Option {
+	return func(s *Service) {
+		s.routes = append(s.routes, route)
+	}
+}
+
 func (s *Service) apply(opts ...Option) {
 	for _, opt := range opts {
 		opt(s)

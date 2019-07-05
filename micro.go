@@ -33,6 +33,7 @@ type Service struct {
 	redoc              *RedocOpts
 	staticDir          string
 	mux                *runtime.ServeMux
+	routes             []Route
 	streamInterceptors []grpc.StreamServerInterceptor
 	unaryInterceptors  []grpc.UnaryServerInterceptor
 	debug              bool
@@ -115,6 +116,16 @@ func defaultService() *Service {
 	s.streamInterceptors = append(s.streamInterceptors, StreamPanicHandler)
 	s.unaryInterceptors = append(s.unaryInterceptors, UnaryPanicHandler)
 
+	// add /metrics HTTP/1 endpoint
+	routeMetrics := Route{
+		Method:  "GET",
+		Pattern: PathPattern("metrics"),
+		Handler: func(w http.ResponseWriter, r *http.Request, pathParams map[string]string) {
+			promhttp.Handler().ServeHTTP(w, r)
+		},
+	}
+	s.routes = append(s.routes, routeMetrics)
+
 	return &s
 }
 
@@ -193,16 +204,21 @@ func (s *Service) startGRPCGateway(httpPort uint16, grpcPort uint16, reverseProx
 
 	s.mux = runtime.NewServeMux(muxOptions...)
 
-	// configure /metrics HTTP/1 endpoint
-	s.mux.Handle("GET", PathPattern("metrics"), func(w http.ResponseWriter, r *http.Request, pathParams map[string]string) {
-		promhttp.Handler().ServeHTTP(w, r)
-	})
-
 	if s.redoc.Up {
-		// configure /docs HTTP/1 endpoint
-		s.mux.Handle("GET", PathPattern("docs"), func(w http.ResponseWriter, r *http.Request, pathParams map[string]string) {
-			s.redoc.Serve(w, r, pathParams)
-		})
+		// add /docs HTTP/1 endpoint
+		routeDocs := Route{
+			Method:  "GET",
+			Pattern: PathPattern(s.redoc.Route),
+			Handler: func(w http.ResponseWriter, r *http.Request, pathParams map[string]string) {
+				s.redoc.Serve(w, r, pathParams)
+			},
+		}
+		s.routes = append(s.routes, routeDocs)
+	}
+
+	// apply routes
+	for _, route := range s.routes {
+		s.mux.Handle(route.Method, route.Pattern, route.Handler)
 	}
 
 	opts := []grpc.DialOption{grpc.WithInsecure()}
