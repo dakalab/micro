@@ -129,7 +129,7 @@ func NewService(opts ...Option) *Service {
 
 	// install open tracing interceptor
 	if s.debug {
-		logger = jaeger.StdLogger
+		SetLogger(jaeger.StdLogger)
 		s.streamInterceptors = append(s.streamInterceptors, otgrpc.OpenTracingStreamServerInterceptor(tracer, otgrpc.LogPayloads()))
 		s.unaryInterceptors = append(s.unaryInterceptors, otgrpc.OpenTracingServerInterceptor(tracer, otgrpc.LogPayloads()))
 	} else {

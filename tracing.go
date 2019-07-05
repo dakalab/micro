@@ -28,16 +28,16 @@ func InitSpan(mux *runtime.ServeMux) http.Handler {
 		var methodName = r.Method + " " + r.URL.Path
 		if err != nil {
 			// Found no span in headers, start a new span as root span
-			logger.Infof(err.Error())
+			Logger().Infof(err.Error())
 			for k, h := range r.Header {
 				for _, v := range h {
-					logger.Infof("Header: %s - %s", k, v)
+					Logger().Infof("Header: %s - %s", k, v)
 				}
 			}
 			serverSpan = opentracing.StartSpan(methodName)
 		} else {
 			// Create span as a child of parent context
-			logger.Infof("Found parent span, start a child span: " + methodName)
+			Logger().Infof("Found parent span, start a child span: " + methodName)
 			serverSpan = opentracing.StartSpan(
 				methodName,
 				opentracing.ChildOf(wireContext),
@@ -50,11 +50,11 @@ func InitSpan(mux *runtime.ServeMux) http.Handler {
 
 		var footprint string
 		if footprint = serverSpan.BaggageItem("footprint"); footprint != "" {
-			logger.Infof("Found baggage item footprint in span: " + footprint)
+			Logger().Infof("Found baggage item footprint in span: " + footprint)
 			serverSpan.SetTag("footprint", footprint)
 		} else {
 			footprint = RequestID(r)
-			logger.Infof("No baggage item footprint found in span, try to get from X-Request-Id: " + footprint)
+			Logger().Infof("No baggage item footprint found in span, try to get from X-Request-Id: " + footprint)
 			serverSpan.SetBaggageItem("footprint", footprint)
 			serverSpan.SetTag("footprint", footprint)
 		}
@@ -63,7 +63,7 @@ func InitSpan(mux *runtime.ServeMux) http.Handler {
 		w.Header().Set("X-Request-Id", footprint)
 
 		// We are passing the span as an item in Go context
-		logger.Infof("Passing span into context: %+v", serverSpan)
+		Logger().Infof("Passing span into context: %+v", serverSpan)
 		var ctx = opentracing.ContextWithSpan(r.Context(), serverSpan)
 
 		mux.ServeHTTP(w, r.WithContext(ctx))
