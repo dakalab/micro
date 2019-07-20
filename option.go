@@ -1,6 +1,8 @@
 package micro
 
 import (
+	"os"
+
 	"github.com/grpc-ecosystem/grpc-gateway/runtime"
 	"google.golang.org/grpc"
 )
@@ -78,6 +80,13 @@ func RouteOpt(route Route) Option {
 func ShutdownFunc(f func()) Option {
 	return func(s *Service) {
 		s.shutdownFunc = f
+	}
+}
+
+// InterruptSignal - return an Option to append a interrupt signal
+func InterruptSignal(signal os.Signal) Option {
+	return func(s *Service) {
+		s.interruptSignals = append(s.interruptSignals, signal)
 	}
 }
 
