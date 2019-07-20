@@ -37,6 +37,7 @@ type Service struct {
 	streamInterceptors []grpc.StreamServerInterceptor
 	unaryInterceptors  []grpc.UnaryServerInterceptor
 	debug              bool
+	shutdownFunc       func()
 }
 
 // ReverseProxyFunc - a callback that the caller should implement to steps to reverse-proxy the HTTP/1 requests to gRPC
@@ -100,6 +101,11 @@ func defaultService() *Service {
 	s.annotators = append(s.annotators, DefaultAnnotator)
 	s.errorHandler = runtime.DefaultHTTPError
 	s.httpHandler = DefaultHTTPHandler
+	s.shutdownFunc = func() {}
+
+	s.redoc = &RedocOpts{
+		Up: false,
+	}
 
 	s.streamInterceptors = []grpc.StreamServerInterceptor{}
 	s.unaryInterceptors = []grpc.UnaryServerInterceptor{}
@@ -250,11 +256,13 @@ func (s *Service) startGRPCGateway(httpPort uint16, grpcPort uint16, reverseProx
 		Handler: handlers.RecoveryHandler()(s.httpHandler(s.mux)),
 	}
 
+	s.HTTPServer.RegisterOnShutdown(s.shutdownFunc)
+
 	return s.HTTPServer.ListenAndServe()
 }
 
-// Stop - stop the microservice
+// Stop - stop the microservice gracefully
 func (s *Service) Stop() {
-	s.GRPCServer.Stop()
+	s.GRPCServer.GracefulStop()
 	s.HTTPServer.Shutdown(context.Background())
 }

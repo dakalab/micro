@@ -19,6 +19,7 @@ import (
 
 var reverseProxyFunc ReverseProxyFunc
 var httpPort, grpcPort uint16
+var shutdownFunc func()
 
 func init() {
 	reverseProxyFunc = func(
@@ -32,6 +33,10 @@ func init() {
 
 	httpPort = 8888
 	grpcPort = 9999
+
+	shutdownFunc = func() {
+		fmt.Println("Server shutting down")
+	}
 }
 
 func TestNewService(t *testing.T) {
@@ -60,6 +65,7 @@ func TestNewService(t *testing.T) {
 		Redoc(redoc),
 		Debug(),
 		RouteOpt(route),
+		ShutdownFunc(shutdownFunc),
 	)
 
 	go func() {
