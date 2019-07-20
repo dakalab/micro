@@ -6,7 +6,9 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"os/signal"
 	"path/filepath"
+	"syscall"
 
 	"github.com/google/uuid"
 	"github.com/gorilla/handlers"
@@ -38,6 +40,8 @@ type Service struct {
 	unaryInterceptors  []grpc.UnaryServerInterceptor
 	debug              bool
 	shutdownFunc       func()
+	interruptSignals   []os.Signal
+	sig                chan os.Signal
 }
 
 // ReverseProxyFunc - a callback that the caller should implement to steps to reverse-proxy the HTTP/1 requests to gRPC
@@ -102,9 +106,18 @@ func defaultService() *Service {
 	s.errorHandler = runtime.DefaultHTTPError
 	s.httpHandler = DefaultHTTPHandler
 	s.shutdownFunc = func() {}
+	s.sig = make(chan os.Signal, 1)
 
 	s.redoc = &RedocOpts{
 		Up: false,
+	}
+
+	// default interrupt signals to catch, you can use InterruptSignal option to append more
+	s.interruptSignals = []os.Signal{
+		syscall.SIGSTOP,
+		syscall.SIGINT,
+		syscall.SIGTERM,
+		syscall.SIGQUIT,
 	}
 
 	s.streamInterceptors = []grpc.StreamServerInterceptor{}
@@ -165,19 +178,44 @@ func NewService(opts ...Option) *Service {
 // Start - start the microservice with listening on the ports
 func (s *Service) Start(httpPort uint16, grpcPort uint16, reverseProxyFunc ReverseProxyFunc) error {
 
-	errChan := make(chan error, 1)
+	// intercept interrupt signals
+	signal.Notify(s.sig, s.interruptSignals...)
 
-	// start HTTP/1.0 gateway server
-	go func() {
-		errChan <- s.startGRPCGateway(httpPort, grpcPort, reverseProxyFunc)
-	}()
+	errChan := make(chan error, 1)
 
 	// start gRPC server
 	go func() {
+		Logger().Infof("Starting gPRC server listening on %d", grpcPort)
 		errChan <- s.startGRPCServer(grpcPort)
 	}()
 
-	return <-errChan
+	// start HTTP/1.0 gateway server
+	go func() {
+		Logger().Infof("Starting http server listening on %d", httpPort)
+		errChan <- s.startGRPCGateway(httpPort, grpcPort, reverseProxyFunc)
+	}()
+
+	ctx := context.Background()
+
+	// wait for context cancellation or shutdown signal
+	select {
+	// if server is closed because of an error
+	case err := <-errChan:
+		s.Stop()
+		return err
+
+	// if context is done or cancelled
+	case <-ctx.Done():
+		Logger().Infof("Context is done or cancelled")
+		s.Stop()
+		return nil
+
+	// if we received an interrupt signal
+	case rSig := <-s.sig:
+		Logger().Infof("Interrupt signal received: %v", rSig)
+		s.Stop()
+		return nil
+	}
 }
 
 func (s *Service) startGRPCServer(grpcPort uint16) error {
@@ -263,6 +301,7 @@ func (s *Service) startGRPCGateway(httpPort uint16, grpcPort uint16, reverseProx
 
 // Stop - stop the microservice gracefully
 func (s *Service) Stop() {
+	close(s.sig)
 	s.GRPCServer.GracefulStop()
 	s.HTTPServer.Shutdown(context.Background())
 }

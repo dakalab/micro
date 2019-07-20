@@ -8,6 +8,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"syscall"
 	"testing"
 	"time"
 
@@ -159,20 +160,23 @@ func TestNewService(t *testing.T) {
 	assert.Error(t, err)
 
 	// grpc port 9999 alreday in use
-	err = s2.startGRPCServer(grpcPort)
+	err = s2.Start(httpPort, grpcPort, reverseProxyFunc)
 	assert.Error(t, err)
 
-	// stop the first server
-	s.Stop()
+	// send an interrupt signal to stop the first server
+	s.sig <- syscall.SIGINT
+
+	// wait 1 second for the server stop
+	time.Sleep(1 * time.Second)
 
 	// run a new service again
-	s = NewService(
+	s3 := NewService(
 		Redoc(&RedocOpts{
 			Up: false,
 		}),
 	)
 	go func() {
-		if err := s.Start(httpPort, grpcPort, reverseProxyFunc); err != nil {
+		if err := s3.Start(httpPort, grpcPort, reverseProxyFunc); err != nil {
 			t.Errorf("failed to serve: %v", err)
 		}
 	}()

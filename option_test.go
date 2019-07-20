@@ -2,6 +2,7 @@ package micro
 
 import (
 	"net/http"
+	"syscall"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -55,4 +56,12 @@ func TestStreamInterceptor(t *testing.T) {
 	)
 
 	assert.Len(t, s.streamInterceptors, 5)
+}
+
+func TestInterruptSignal(t *testing.T) {
+	s := NewService(
+		InterruptSignal(syscall.SIGKILL),
+	)
+
+	assert.Len(t, s.interruptSignals, 5)
 }
