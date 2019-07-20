@@ -74,6 +74,13 @@ func RouteOpt(route Route) Option {
 	}
 }
 
+// ShutdownFunc - return an Option to register a function which will be called when server shutdown
+func ShutdownFunc(f func()) Option {
+	return func(s *Service) {
+		s.shutdownFunc = f
+	}
+}
+
 func (s *Service) apply(opts ...Option) {
 	for _, opt := range opts {
 		opt(s)
