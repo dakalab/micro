@@ -148,35 +148,44 @@ func TestNewService(t *testing.T) {
 	assert.Equal(t, "Hello!", string(body))
 	rootSpan.Finish()
 
-	// another service
+	// create service s2 to trigger errChan1
 	s2 := NewService(
 		Redoc(&RedocOpts{
 			Up: false,
 		}),
 	)
 
-	// http port 8888 already in use
-	err = s2.startGRPCGateway(httpPort, grpcPort, reverseProxyFunc)
-	assert.Error(t, err)
-
 	// grpc port 9999 alreday in use
 	err = s2.Start(httpPort, grpcPort, reverseProxyFunc)
 	assert.Error(t, err)
 
-	// send an interrupt signal to stop the first server
-	s.sig <- syscall.SIGINT
-
-	// wait 1 second for the server stop
-	time.Sleep(1 * time.Second)
-
-	// run a new service again
+	// create service s3 to trigger errChan2
 	s3 := NewService(
 		Redoc(&RedocOpts{
 			Up: false,
 		}),
 	)
+
+	// http port 8888 already in use
+	s.GRPCServer.Stop()
+	err = s3.Start(httpPort, grpcPort, reverseProxyFunc)
+	assert.Error(t, err)
+
+	// wait 1 second for s3 gRPC server start
+	time.Sleep(1 * time.Second)
+
+	// close all previous services
+	s.HTTPServer.Close()
+	s3.GRPCServer.Stop()
+
+	// run a new service again
+	s4 := NewService(
+		Redoc(&RedocOpts{
+			Up: false,
+		}),
+	)
 	go func() {
-		if err := s3.Start(httpPort, grpcPort, reverseProxyFunc); err != nil {
+		if err := s4.Start(httpPort, grpcPort, reverseProxyFunc); err != nil {
 			t.Errorf("failed to serve: %v", err)
 		}
 	}()
@@ -191,6 +200,9 @@ func TestNewService(t *testing.T) {
 	}
 	assert.Equal(t, http.StatusNotFound, resp.StatusCode)
 	assert.Len(t, resp.Header.Get("X-Request-Id"), 36)
+
+	// send an interrupt signal to stop s4
+	syscall.Kill(s4.Getpid(), syscall.SIGINT)
 }
 
 func TestErrorReverseProxyFunc(t *testing.T) {
