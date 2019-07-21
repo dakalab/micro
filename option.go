@@ -2,6 +2,7 @@ package micro
 
 import (
 	"os"
+	"time"
 
 	"github.com/grpc-ecosystem/grpc-gateway/runtime"
 	"google.golang.org/grpc"
@@ -80,6 +81,21 @@ func RouteOpt(route Route) Option {
 func ShutdownFunc(f func()) Option {
 	return func(s *Service) {
 		s.shutdownFunc = f
+	}
+}
+
+// ShutdownTimeout - return an Option to set the timeout before the server shutdown abruptly
+func ShutdownTimeout(timeout time.Duration) Option {
+	return func(s *Service) {
+		s.shutdownTimeout = timeout
+	}
+}
+
+// PreShutdownDelay - return an Option to set the time waiting for running goroutines
+// to finish their jobs before the shutdown starts
+func PreShutdownDelay(timeout time.Duration) Option {
+	return func(s *Service) {
+		s.preShutdownDelay = timeout
 	}
 }
 
