@@ -67,6 +67,7 @@ func TestNewService(t *testing.T) {
 		Debug(),
 		RouteOpt(route),
 		ShutdownFunc(shutdownFunc),
+		PreShutdownDelay(0),
 	)
 
 	go func() {
@@ -183,6 +184,7 @@ func TestNewService(t *testing.T) {
 		Redoc(&RedocOpts{
 			Up: false,
 		}),
+		ShutdownTimeout(10*time.Second),
 	)
 	go func() {
 		if err := s4.Start(httpPort, grpcPort, reverseProxyFunc); err != nil {
@@ -203,6 +205,9 @@ func TestNewService(t *testing.T) {
 
 	// send an interrupt signal to stop s4
 	syscall.Kill(s4.Getpid(), syscall.SIGINT)
+
+	// wait 3 second for the server shutdown
+	time.Sleep(3 * time.Second)
 }
 
 func TestErrorReverseProxyFunc(t *testing.T) {

@@ -9,6 +9,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"syscall"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/gorilla/handlers"
@@ -40,8 +41,17 @@ type Service struct {
 	unaryInterceptors  []grpc.UnaryServerInterceptor
 	debug              bool
 	shutdownFunc       func()
+	shutdownTimeout    time.Duration
+	preShutdownDelay   time.Duration
 	interruptSignals   []os.Signal
 }
+
+const (
+	// the default timeout before the server shutdown abruptly
+	defaultShutdownTimeout = 30 * time.Second
+	// the default time waiting for running goroutines to finish their jobs before the shutdown starts
+	defaultPreShutdownDelay = 1 * time.Second
+)
 
 // ReverseProxyFunc - a callback that the caller should implement to steps to reverse-proxy the HTTP/1 requests to gRPC
 type ReverseProxyFunc func(ctx context.Context, mux *runtime.ServeMux, grpcHostAndPort string, opts []grpc.DialOption) error
@@ -105,6 +115,8 @@ func defaultService() *Service {
 	s.errorHandler = runtime.DefaultHTTPError
 	s.httpHandler = DefaultHTTPHandler
 	s.shutdownFunc = func() {}
+	s.shutdownTimeout = defaultShutdownTimeout
+	s.preShutdownDelay = defaultPreShutdownDelay
 
 	s.redoc = &RedocOpts{
 		Up: false,
@@ -201,8 +213,6 @@ func (s *Service) Start(httpPort uint16, grpcPort uint16, reverseProxyFunc Rever
 		errChan2 <- s.startGRPCGateway(httpPort, grpcPort, reverseProxyFunc)
 	}()
 
-	ctx := context.Background()
-
 	// wait for context cancellation or shutdown signal
 	select {
 	// if gRPC server fail to start
@@ -212,12 +222,6 @@ func (s *Service) Start(httpPort uint16, grpcPort uint16, reverseProxyFunc Rever
 	// if http server fail to start
 	case err := <-errChan2:
 		return err
-
-	// if context is done or cancelled
-	case <-ctx.Done():
-		Logger().Infof("Context is done or cancelled")
-		s.Stop()
-		return nil
 
 	// if we received an interrupt signal
 	case sig := <-sigChan:
@@ -310,6 +314,24 @@ func (s *Service) startGRPCGateway(httpPort uint16, grpcPort uint16, reverseProx
 
 // Stop - stop the microservice gracefully
 func (s *Service) Stop() {
+	// disable keep-alives on existing connections
+	s.HTTPServer.SetKeepAlivesEnabled(false)
+
+	// we wait for a duration of preShutdownDelay for running goroutines to finish their jobs
+	if s.preShutdownDelay > 0 {
+		Logger().Infof("Waiting for %v before shutdown starts", s.preShutdownDelay)
+		time.Sleep(s.preShutdownDelay)
+	}
+
+	// gracefully stop gRPC server first
 	s.GRPCServer.GracefulStop()
-	s.HTTPServer.Shutdown(context.Background())
+
+	var ctx, cancel = context.WithTimeout(
+		context.Background(),
+		s.shutdownTimeout,
+	)
+	defer cancel()
+
+	// gracefully stop http server
+	s.HTTPServer.Shutdown(ctx)
 }
