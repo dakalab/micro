@@ -179,7 +179,9 @@ func TestNewService(t *testing.T) {
 	s.HTTPServer.Close()
 	s3.GRPCServer.Stop()
 
-	// run a new service again
+	// run a new service, we use different ports to make sure ci not complain
+	httpPort = 18888
+	grpcPort = 19999
 	s4 := NewService(
 		Redoc(&RedocOpts{
 			Up: false,
