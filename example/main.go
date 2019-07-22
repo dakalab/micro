@@ -35,7 +35,7 @@ func main() {
 	}
 
 	s := micro.NewService(
-		micro.Debug(),
+		micro.Debug(true),
 		micro.RouteOpt(route),
 		micro.ShutdownFunc(sf),
 	)

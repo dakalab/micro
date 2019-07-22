@@ -64,7 +64,7 @@ func TestNewService(t *testing.T) {
 
 	s := NewService(
 		Redoc(redoc),
-		Debug(),
+		Debug(true),
 		RouteOpt(route),
 		ShutdownFunc(shutdownFunc),
 		PreShutdownDelay(0),

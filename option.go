@@ -14,10 +14,10 @@ import (
 // http://dave.cheney.net/2014/10/17/functional-options-for-friendly-apis
 type Option func(s *Service)
 
-// Debug - return an Option to set the service to debug mode
-func Debug() Option {
+// Debug - return an Option to set the service to debug mode or not
+func Debug(flag bool) Option {
 	return func(s *Service) {
-		s.debug = true
+		s.debug = flag
 	}
 }
 
