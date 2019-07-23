@@ -8,7 +8,24 @@ import (
 	"github.com/dakalab/micro"
 	"github.com/grpc-ecosystem/grpc-gateway/runtime"
 	"google.golang.org/grpc"
+	"github.com/dakalab/micro/example/proto"
 )
+
+// Greeter - class to implement all gRPC endpoints of Greeter
+type Greeter struct {
+}
+
+// SayHello implements gRPC endpoint "SayHello"
+func (s *Greeter) SayHello(
+	ctx context.Context,
+	req *proto.HelloRequest,
+) (*proto.HelloResponse, error) {
+	return &proto.HelloResponse{
+		Message: "Hello " + req.Name,
+	}, nil
+}
+
+var _ proto.GreeterServer = (*Greeter)(nil) // make sure it implements the interface
 
 func main() {
 
@@ -18,7 +35,7 @@ func main() {
 		grpcHostAndPort string,
 		opts []grpc.DialOption,
 	) error {
-		return nil
+		return proto.RegisterGreeterHandlerFromEndpoint(ctx, mux, grpcHostAndPort, opts)
 	}
 
 	// add the /test endpoint
@@ -39,6 +56,8 @@ func main() {
 		micro.RouteOpt(route),
 		micro.ShutdownFunc(sf),
 	)
+
+	proto.RegisterGreeterServer(s.GRPCServer, &Greeter{})
 
 	var httpPort, grpcPort uint16
 	httpPort = 8888
