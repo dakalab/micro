@@ -1,6 +1,7 @@
 package micro
 
 import (
+	"net/http"
 	"os"
 	"time"
 
@@ -110,6 +111,13 @@ func InterruptSignal(signal os.Signal) Option {
 func GRPCServerOption(serverOption grpc.ServerOption) Option {
 	return func(s *Service) {
 		s.grpcServerOptions = append(s.grpcServerOptions, serverOption)
+	}
+}
+
+// WithHTTPServer - return an Option to set the http server
+func WithHTTPServer(server *http.Server) Option {
+	return func(s *Service) {
+		s.HTTPServer = server
 	}
 }
 

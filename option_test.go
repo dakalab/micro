@@ -74,3 +74,13 @@ func TestGRPCServerOption(t *testing.T) {
 
 	assert.Len(t, s.grpcServerOptions, 3)
 }
+
+func TestWithHTTPServer(t *testing.T) {
+	s := NewService(WithHTTPServer(&http.Server{
+		ReadTimeout:  5 * time.Second,
+		WriteTimeout: 10 * time.Second,
+		IdleTimeout:  15 * time.Second,
+	}))
+	assert.NotNil(t, s.HTTPServer)
+	assert.Equal(t, 5*time.Second, s.HTTPServer.ReadTimeout)
+}

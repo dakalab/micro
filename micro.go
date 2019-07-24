@@ -185,6 +185,10 @@ func NewService(opts ...Option) *Service {
 		s.grpcServerOptions...,
 	)
 
+	if s.HTTPServer == nil {
+		s.HTTPServer = &http.Server{}
+	}
+
 	return s
 }
 
@@ -305,11 +309,8 @@ func (s *Service) startGRPCGateway(httpPort uint16, grpcPort uint16, reverseProx
 		http.ServeFile(w, r, path)
 	})
 
-	s.HTTPServer = &http.Server{
-		Addr:    fmt.Sprintf(":%d", httpPort),
-		Handler: handlers.RecoveryHandler()(s.httpHandler(s.mux)),
-	}
-
+	s.HTTPServer.Addr = fmt.Sprintf(":%d", httpPort)
+	s.HTTPServer.Handler = handlers.RecoveryHandler()(s.httpHandler(s.mux))
 	s.HTTPServer.RegisterOnShutdown(s.shutdownFunc)
 
 	return s.HTTPServer.ListenAndServe()
