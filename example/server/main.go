@@ -15,7 +15,7 @@ import (
 	"google.golang.org/grpc/credentials"
 )
 
-// Greeter - class to implement all gRPC endpoints of Greeter
+// Greeter - implementation of GreeterServer
 type Greeter struct {
 }
 
@@ -85,32 +85,25 @@ func main() {
 		or credentials
 	************************************************************************************************/
 	// create the TLS credentials
-	creds, err := credentials.NewServerTLSFromFile(crt, key)
+	serverCreds, err := credentials.NewServerTLSFromFile(crt, key)
 	if err != nil {
 		log.Fatal(err)
 	}
-	s2 := micro.NewService(
-		micro.Debug(true),
-		micro.RouteOpt(route),
-		micro.ShutdownFunc(sf),
-		micro.Redoc(redoc),
-		micro.GRPCServerOption(grpc.Creds(creds)),
-	)
-	proto.RegisterGreeterServer(s2.GRPCServer, &Greeter{})
 
 	clientCreds, err := credentials.NewClientTLSFromFile(crt, serverName)
 	if err != nil {
 		log.Fatal(err)
 	}
-	tlsReverseProxyFunc := func(
-		ctx context.Context,
-		mux *runtime.ServeMux,
-		grpcHostAndPort string,
-		opts []grpc.DialOption,
-	) error {
-		opts = append(opts, grpc.WithTransportCredentials(clientCreds))
-		return proto.RegisterGreeterHandlerFromEndpoint(ctx, mux, grpcHostAndPort, opts)
-	}
+
+	s2 := micro.NewService(
+		micro.Debug(true),
+		micro.RouteOpt(route),
+		micro.ShutdownFunc(sf),
+		micro.Redoc(redoc),
+		micro.GRPCServerOption(grpc.Creds(serverCreds)),
+		micro.GRPCDialOption(grpc.WithTransportCredentials(clientCreds)),
+	)
+	proto.RegisterGreeterServer(s2.GRPCServer, &Greeter{})
 
 	/***********************************************************************************************
 		Server 3: mutual tls server with certificate authority
@@ -133,11 +126,17 @@ func main() {
 		log.Fatal("failed to append ca certs")
 	}
 
-	// create the TLS configuration to pass to the GRPC server
-	creds2 := credentials.NewTLS(&tls.Config{
+	// create the TLS configuration
+	serverCreds2 := credentials.NewTLS(&tls.Config{
 		ClientAuth:   tls.RequireAndVerifyClientCert,
 		Certificates: []tls.Certificate{certificate},
 		ClientCAs:    certPool,
+	})
+
+	clientCreds2 := credentials.NewTLS(&tls.Config{
+		ServerName:   serverName,
+		Certificates: []tls.Certificate{certificate},
+		RootCAs:      certPool,
 	})
 
 	s3 := micro.NewService(
@@ -145,7 +144,8 @@ func main() {
 		micro.RouteOpt(route),
 		micro.ShutdownFunc(sf),
 		micro.Redoc(redoc),
-		micro.GRPCServerOption(grpc.Creds(creds2)),
+		micro.GRPCServerOption(grpc.Creds(serverCreds2)),
+		micro.GRPCDialOption(grpc.WithTransportCredentials(clientCreds2)),
 	)
 	proto.RegisterGreeterServer(s3.GRPCServer, &Greeter{})
 
@@ -164,7 +164,7 @@ func main() {
 		var httpPort, grpcPort uint16
 		httpPort = 18888
 		grpcPort = 19999
-		errChan <- s2.Start(httpPort, grpcPort, tlsReverseProxyFunc)
+		errChan <- s2.Start(httpPort, grpcPort, reverseProxyFunc)
 	}()
 
 	// run mutual tls server 3
@@ -172,7 +172,7 @@ func main() {
 		var httpPort, grpcPort uint16
 		httpPort = 28888
 		grpcPort = 29999
-		errChan <- s3.Start(httpPort, grpcPort, tlsReverseProxyFunc)
+		errChan <- s3.Start(httpPort, grpcPort, reverseProxyFunc)
 	}()
 
 	log.Fatal(<-errChan)
