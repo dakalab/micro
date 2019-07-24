@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"io/ioutil"
 	"log"
 	"net/http"
@@ -10,6 +12,7 @@ import (
 	"github.com/dakalab/micro/example/proto"
 	"github.com/grpc-ecosystem/grpc-gateway/runtime"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
 )
 
 // Greeter - class to implement all gRPC endpoints of Greeter
@@ -27,6 +30,12 @@ func (s *Greeter) SayHello(
 }
 
 var _ proto.GreeterServer = (*Greeter)(nil) // make sure it implements the interface
+
+var (
+	crt = "certs/server.crt"
+	key = "certs/server.key"
+	ca  = "certs/ca.crt"
+)
 
 func main() {
 
@@ -59,19 +68,97 @@ func main() {
 	}
 	redoc.AddSpec("Greeter", "/hello.swagger.json")
 
+	/***********************************************************************************************
+		Server 1: insecure server
+	***********************************************************************************************/
 	s := micro.NewService(
 		micro.Debug(true),
 		micro.RouteOpt(route),
 		micro.ShutdownFunc(sf),
 		micro.Redoc(redoc),
 	)
-
 	proto.RegisterGreeterServer(s.GRPCServer, &Greeter{})
 
-	var httpPort, grpcPort uint16
-	httpPort = 8888
-	grpcPort = 9999
-	if err := s.Start(httpPort, grpcPort, reverseProxyFunc); err != nil {
+	/***********************************************************************************************
+		Server 2: tls server with server-side encryption that does not expect client authentication
+		or credentials
+	************************************************************************************************/
+	// create the TLS credentials
+	creds, err := credentials.NewServerTLSFromFile(crt, key)
+	if err != nil {
 		log.Fatal(err)
 	}
+	s2 := micro.NewService(
+		micro.Debug(true),
+		micro.RouteOpt(route),
+		micro.ShutdownFunc(sf),
+		micro.Redoc(redoc),
+		micro.GRPCServerOption(grpc.Creds(creds)),
+	)
+	proto.RegisterGreeterServer(s2.GRPCServer, &Greeter{})
+
+	/***********************************************************************************************
+		Server 3: mutual tls server with certificate authority
+	************************************************************************************************/
+	// load the certificates from disk
+	certificate, err := tls.LoadX509KeyPair(crt, key)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// create a certificate pool from the certificate authority
+	certPool := x509.NewCertPool()
+	ca, err := ioutil.ReadFile(ca)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// append the client certificates from the CA
+	if ok := certPool.AppendCertsFromPEM(ca); !ok {
+		log.Fatal("failed to append ca certs")
+	}
+
+	// create the TLS configuration to pass to the GRPC server
+	creds2 := credentials.NewTLS(&tls.Config{
+		ClientAuth:   tls.RequireAndVerifyClientCert,
+		Certificates: []tls.Certificate{certificate},
+		ClientCAs:    certPool,
+	})
+
+	s3 := micro.NewService(
+		micro.Debug(true),
+		micro.RouteOpt(route),
+		micro.ShutdownFunc(sf),
+		micro.Redoc(redoc),
+		micro.GRPCServerOption(grpc.Creds(creds2)),
+	)
+	proto.RegisterGreeterServer(s3.GRPCServer, &Greeter{})
+
+	errChan := make(chan error, 1)
+
+	// run insecure server 1
+	go func() {
+		var httpPort, grpcPort uint16
+		httpPort = 8888
+		grpcPort = 9999
+		errChan <- s.Start(httpPort, grpcPort, reverseProxyFunc)
+	}()
+
+	// run tls server 2
+	go func() {
+		var httpPort, grpcPort uint16
+		httpPort = 18888
+		grpcPort = 19999
+		errChan <- s2.Start(httpPort, grpcPort, reverseProxyFunc)
+	}()
+
+	// run mutual tls server 3
+	go func() {
+		var httpPort, grpcPort uint16
+		httpPort = 28888
+		grpcPort = 29999
+		errChan <- s3.Start(httpPort, grpcPort, reverseProxyFunc)
+	}()
+
+	log.Fatal(<-errChan)
 }

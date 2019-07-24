@@ -114,7 +114,8 @@ func GRPCServerOption(serverOption grpc.ServerOption) Option {
 	}
 }
 
-// WithHTTPServer - return an Option to set the http server
+// WithHTTPServer - return an Option to set the http server, note that the Addr and Handler will be
+// reset in startGRPCGateway(), so you are not able to specify them
 func WithHTTPServer(server *http.Server) Option {
 	return func(s *Service) {
 		s.HTTPServer = server
