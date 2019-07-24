@@ -106,6 +106,13 @@ func InterruptSignal(signal os.Signal) Option {
 	}
 }
 
+// GRPCServerOption - return an Option to append a gRPC server option
+func GRPCServerOption(serverOption grpc.ServerOption) Option {
+	return func(s *Service) {
+		s.grpcServerOptions = append(s.grpcServerOptions, serverOption)
+	}
+}
+
 func (s *Service) apply(opts ...Option) {
 	for _, opt := range opts {
 		opt(s)

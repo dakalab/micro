@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"syscall"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/net/context"
@@ -64,4 +65,12 @@ func TestInterruptSignal(t *testing.T) {
 	)
 
 	assert.Len(t, s.interruptSignals, 5)
+}
+
+func TestGRPCServerOption(t *testing.T) {
+	s := NewService(
+		GRPCServerOption(grpc.ConnectionTimeout(10 * time.Second)),
+	)
+
+	assert.Len(t, s.grpcServerOptions, 3)
 }

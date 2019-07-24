@@ -44,6 +44,7 @@ type Service struct {
 	shutdownTimeout    time.Duration
 	preShutdownDelay   time.Duration
 	interruptSignals   []os.Signal
+	grpcServerOptions  []grpc.ServerOption
 }
 
 const (
@@ -177,9 +178,11 @@ func NewService(opts ...Option) *Service {
 		s.unaryInterceptors = append(s.unaryInterceptors, otgrpc.OpenTracingServerInterceptor(tracer))
 	}
 
+	s.grpcServerOptions = append(s.grpcServerOptions, grpc_middleware.WithStreamServerChain(s.streamInterceptors...))
+	s.grpcServerOptions = append(s.grpcServerOptions, grpc_middleware.WithUnaryServerChain(s.unaryInterceptors...))
+
 	s.GRPCServer = grpc.NewServer(
-		grpc_middleware.WithStreamServerChain(s.streamInterceptors...),
-		grpc_middleware.WithUnaryServerChain(s.unaryInterceptors...),
+		s.grpcServerOptions...,
 	)
 
 	return s
