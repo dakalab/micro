@@ -114,6 +114,13 @@ func GRPCServerOption(serverOption grpc.ServerOption) Option {
 	}
 }
 
+// GRPCDialOption - return an Option to append a gRPC dial option
+func GRPCDialOption(dialOption grpc.DialOption) Option {
+	return func(s *Service) {
+		s.grpcDialOptions = append(s.grpcDialOptions, dialOption)
+	}
+}
+
 // WithHTTPServer - return an Option to set the http server, note that the Addr and Handler will be
 // reset in startGRPCGateway(), so you are not able to specify them
 func WithHTTPServer(server *http.Server) Option {

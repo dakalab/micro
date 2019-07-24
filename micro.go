@@ -45,6 +45,7 @@ type Service struct {
 	preShutdownDelay   time.Duration
 	interruptSignals   []os.Signal
 	grpcServerOptions  []grpc.ServerOption
+	grpcDialOptions    []grpc.DialOption
 }
 
 const (
@@ -168,6 +169,11 @@ func NewService(opts ...Option) *Service {
 	// default tracer is NoopTracer, you need to use an acutal tracer for tracing
 	tracer := opentracing.GlobalTracer()
 
+	// default dial option is using insecure connection
+	if len(s.grpcDialOptions) == 0 {
+		s.grpcDialOptions = append(s.grpcDialOptions, grpc.WithInsecure())
+	}
+
 	// install open tracing interceptor
 	if s.debug {
 		SetLogger(jaeger.StdLogger)
@@ -285,8 +291,7 @@ func (s *Service) startGRPCGateway(httpPort uint16, grpcPort uint16, reverseProx
 		s.mux.Handle(route.Method, route.Pattern, route.Handler)
 	}
 
-	opts := []grpc.DialOption{grpc.WithInsecure()}
-	err := reverseProxyFunc(context.Background(), s.mux, fmt.Sprintf("localhost:%d", grpcPort), opts)
+	err := reverseProxyFunc(context.Background(), s.mux, fmt.Sprintf("localhost:%d", grpcPort), s.grpcDialOptions)
 	if err != nil {
 		return err
 	}

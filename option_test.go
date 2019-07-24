@@ -75,6 +75,14 @@ func TestGRPCServerOption(t *testing.T) {
 	assert.Len(t, s.grpcServerOptions, 3)
 }
 
+func TestGRPCDialOption(t *testing.T) {
+	s := NewService(
+		GRPCDialOption(grpc.WithBlock()),
+	)
+
+	assert.Len(t, s.grpcDialOptions, 1)
+}
+
 func TestWithHTTPServer(t *testing.T) {
 	s := NewService(WithHTTPServer(&http.Server{
 		ReadTimeout:  5 * time.Second,

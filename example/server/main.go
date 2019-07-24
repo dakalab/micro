@@ -32,9 +32,10 @@ func (s *Greeter) SayHello(
 var _ proto.GreeterServer = (*Greeter)(nil) // make sure it implements the interface
 
 var (
-	crt = "certs/server.crt"
-	key = "certs/server.key"
-	ca  = "certs/ca.crt"
+	serverName = "server"
+	crt        = "certs/server.crt"
+	key        = "certs/server.key"
+	ca         = "certs/ca.crt"
 )
 
 func main() {
@@ -53,7 +54,7 @@ func main() {
 		Method:  "GET",
 		Pattern: micro.PathPattern("hello.swagger.json"),
 		Handler: func(w http.ResponseWriter, r *http.Request, pathParams map[string]string) {
-			data, _ := ioutil.ReadFile("../proto/hello.swagger.json")
+			data, _ := ioutil.ReadFile("proto/hello.swagger.json")
 			w.Write(data)
 		},
 	}
@@ -96,6 +97,20 @@ func main() {
 		micro.GRPCServerOption(grpc.Creds(creds)),
 	)
 	proto.RegisterGreeterServer(s2.GRPCServer, &Greeter{})
+
+	clientCreds, err := credentials.NewClientTLSFromFile(crt, serverName)
+	if err != nil {
+		log.Fatal(err)
+	}
+	tlsReverseProxyFunc := func(
+		ctx context.Context,
+		mux *runtime.ServeMux,
+		grpcHostAndPort string,
+		opts []grpc.DialOption,
+	) error {
+		opts = append(opts, grpc.WithTransportCredentials(clientCreds))
+		return proto.RegisterGreeterHandlerFromEndpoint(ctx, mux, grpcHostAndPort, opts)
+	}
 
 	/***********************************************************************************************
 		Server 3: mutual tls server with certificate authority
@@ -149,7 +164,7 @@ func main() {
 		var httpPort, grpcPort uint16
 		httpPort = 18888
 		grpcPort = 19999
-		errChan <- s2.Start(httpPort, grpcPort, reverseProxyFunc)
+		errChan <- s2.Start(httpPort, grpcPort, tlsReverseProxyFunc)
 	}()
 
 	// run mutual tls server 3
@@ -157,7 +172,7 @@ func main() {
 		var httpPort, grpcPort uint16
 		httpPort = 28888
 		grpcPort = 29999
-		errChan <- s3.Start(httpPort, grpcPort, reverseProxyFunc)
+		errChan <- s3.Start(httpPort, grpcPort, tlsReverseProxyFunc)
 	}()
 
 	log.Fatal(<-errChan)

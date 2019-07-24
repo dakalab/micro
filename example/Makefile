@@ -40,7 +40,7 @@ server: server-down
 
 .PHONY: server-down
 server-down:
-	docker rm -f micro-demo-server
+	docker rm -f micro-demo-server || true
 
 .PHONY: client
 client:
