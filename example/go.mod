@@ -4,7 +4,7 @@ go 1.11
 
 require (
 	cloud.google.com/go v0.43.0 // indirect
-	github.com/dakalab/micro v1.4.1-0.20190724180135-05be737aca21
+	github.com/dakalab/micro v1.4.1
 	github.com/go-kit/kit v0.9.0 // indirect
 	github.com/gogo/protobuf v1.2.1
 	github.com/golang/protobuf v1.3.2
