@@ -114,6 +114,13 @@ func GRPCDialOption(dialOption grpc.DialOption) Option {
 	}
 }
 
+// MuxOption returns an Option to append a mux option
+func MuxOption(muxOption runtime.ServeMuxOption) Option {
+	return func(s *Service) {
+		s.muxOptions = append(s.muxOptions, muxOption)
+	}
+}
+
 // WithHTTPServer returns an Option to set the http server, note that the Addr and Handler will be
 // reset in startGRPCGateway(), so you are not able to specify them
 func WithHTTPServer(server *http.Server) Option {
