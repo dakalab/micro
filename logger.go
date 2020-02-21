@@ -1,19 +1,15 @@
 package micro
 
-import jaeger "github.com/uber/jaeger-client-go"
-
-var logger jaeger.Logger
-
-func init() {
-	logger = jaeger.NullLogger
+// Logger is logger interface
+type Logger interface {
+	Printf(string, ...interface{})
 }
 
-// SetLogger - set the logger
-func SetLogger(l jaeger.Logger) {
-	logger = l
-}
+// LoggerFunc is a bridge between Logger and any third party logger
+type LoggerFunc func(string, ...interface{})
 
-// Logger - get the logger
-func Logger() jaeger.Logger {
-	return logger
-}
+// Printf implements Logger interface
+func (f LoggerFunc) Printf(msg string, args ...interface{}) { f(msg, args...) }
+
+// dummy logger writes nothing
+var dummyLogger = LoggerFunc(func(string, ...interface{}) {})
