@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/grpc-ecosystem/grpc-gateway/runtime"
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
@@ -91,4 +92,15 @@ func TestWithHTTPServer(t *testing.T) {
 	}))
 	assert.NotNil(t, s.HTTPServer)
 	assert.Equal(t, 5*time.Second, s.HTTPServer.ReadTimeout)
+}
+
+func TestMuxOption(t *testing.T) {
+	s := NewService(
+		MuxOption(runtime.WithMarshalerOption(
+			runtime.MIMEWildcard,
+			&runtime.JSONPb{OrigName: true, EmitDefaults: true},
+		)),
+	)
+
+	assert.Len(t, s.muxOptions, 3)
 }

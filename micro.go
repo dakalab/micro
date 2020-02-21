@@ -30,6 +30,7 @@ type Service struct {
 	annotators         []AnnotatorFunc
 	redoc              *RedocOpts
 	staticDir          string
+	muxOptions         []runtime.ServeMuxOption
 	mux                *runtime.ServeMux
 	routes             []Route
 	streamInterceptors []grpc.StreamServerInterceptor
@@ -57,6 +58,9 @@ type HTTPHandlerFunc func(*runtime.ServeMux) http.Handler
 
 // AnnotatorFunc is the annotator function is for injecting meta data from http request into gRPC context
 type AnnotatorFunc func(context.Context, *http.Request) metadata.MD
+
+// refer: https://github.com/grpc-ecosystem/grpc-gateway/blob/master/docs/_docs/customizingyourgateway.md
+var defaultMuxOption = runtime.WithMarshalerOption(runtime.MIMEWildcard, &runtime.JSONPb{EmitDefaults: true})
 
 // DefaultHTTPHandler is the default http handler which does nothing
 func DefaultHTTPHandler(mux *runtime.ServeMux) http.Handler {
@@ -95,6 +99,9 @@ func defaultService() *Service {
 	s.streamInterceptors = append(s.streamInterceptors, grpc_recovery.StreamServerInterceptor())
 	s.unaryInterceptors = append(s.unaryInterceptors, grpc_recovery.UnaryServerInterceptor())
 
+	// apply default marshaler option for mux, can be replaced by using MuxOption
+	s.muxOptions = append(s.muxOptions, defaultMuxOption)
+
 	// add /metrics HTTP/1 endpoint
 	routeMetrics := Route{
 		Method:  "GET",
@@ -118,6 +125,15 @@ func NewService(opts ...Option) *Service {
 	if len(s.grpcDialOptions) == 0 {
 		s.grpcDialOptions = append(s.grpcDialOptions, grpc.WithInsecure())
 	}
+
+	// init gateway mux
+	s.muxOptions = append(s.muxOptions, runtime.WithProtoErrorHandler(s.errorHandler))
+
+	for _, annotator := range s.annotators {
+		s.muxOptions = append(s.muxOptions, runtime.WithMetadata(annotator))
+	}
+
+	s.mux = runtime.NewServeMux(s.muxOptions...)
 
 	s.grpcServerOptions = append(s.grpcServerOptions, grpc_middleware.WithStreamServerChain(s.streamInterceptors...))
 	s.grpcServerOptions = append(s.grpcServerOptions, grpc_middleware.WithUnaryServerChain(s.unaryInterceptors...))
@@ -193,20 +209,6 @@ func (s *Service) startGRPCServer(grpcPort uint16) error {
 }
 
 func (s *Service) startGRPCGateway(httpPort uint16, grpcPort uint16, reverseProxyFunc ReverseProxyFunc) error {
-	// refer: https://github.com/grpc-ecosystem/grpc-gateway/blob/master/docs/_docs/customizingyourgateway.md
-	var muxOptions []runtime.ServeMuxOption
-	muxOptions = append(muxOptions, runtime.WithMarshalerOption(
-		runtime.MIMEWildcard,
-		&runtime.JSONPb{EmitDefaults: true},
-	))
-	muxOptions = append(muxOptions, runtime.WithProtoErrorHandler(s.errorHandler))
-
-	for _, annotator := range s.annotators {
-		muxOptions = append(muxOptions, runtime.WithMetadata(annotator))
-	}
-
-	s.mux = runtime.NewServeMux(muxOptions...)
-
 	if s.redoc.Up {
 		// add redoc endpoint for api docs
 		routeDocs := Route{
