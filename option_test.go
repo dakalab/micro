@@ -26,7 +26,7 @@ func TestAnnotator(t *testing.T) {
 		}),
 	)
 
-	assert.Len(t, s.annotators, 2)
+	assert.Len(t, s.annotators, 1)
 }
 
 func TestErrorHandler(t *testing.T) {
@@ -46,7 +46,7 @@ func TestUnaryInterceptor(t *testing.T) {
 		}),
 	)
 
-	assert.Len(t, s.unaryInterceptors, 5)
+	assert.Len(t, s.unaryInterceptors, 4)
 }
 
 func TestStreamInterceptor(t *testing.T) {
@@ -56,7 +56,7 @@ func TestStreamInterceptor(t *testing.T) {
 		}),
 	)
 
-	assert.Len(t, s.streamInterceptors, 5)
+	assert.Len(t, s.streamInterceptors, 4)
 }
 
 func TestInterruptSignal(t *testing.T) {

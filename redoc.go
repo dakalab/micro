@@ -6,17 +6,17 @@ import (
 	"net/http"
 )
 
-// RedocOpts - the Redoc configures type
+// RedocOpts is configures for redoc
 type RedocOpts struct {
-	// Route - the route in http server, DO NOT include / at the beginning
+	// Route is the route in http server, DO NOT include / at the beginning
 	Route string
-	// SpecURLs - the urls to find the spec for, format: name -> url
+	// SpecURLs are the urls to find the spec for, format: name -> url
 	SpecURLs map[string]string
-	// RedocURL - the js that generates the redoc site, defaults to: https://cdn.jsdelivr.net/npm/redoc@next/bundles/redoc.standalone.js
+	// RedocURL is the js that generates the redoc site, defaults to: https://cdn.jsdelivr.net/npm/redoc@next/bundles/redoc.standalone.js
 	RedocURL string
-	// Title - the page title, default to: API documentation
+	// Title is the page title, default to: API documentation
 	Title string
-	// Up - whether to boot up the redoc endpoints
+	// Up is whether to boot up the redoc endpoints
 	Up bool
 }
 
@@ -34,7 +34,7 @@ func (redoc *RedocOpts) ensureDefaults() {
 	}
 }
 
-// AddSpec - add a spec url with name
+// AddSpec adds a spec url with name
 func (redoc *RedocOpts) AddSpec(name, url string) *RedocOpts {
 	if redoc.SpecURLs == nil {
 		redoc.SpecURLs = make(map[string]string)
@@ -45,7 +45,7 @@ func (redoc *RedocOpts) AddSpec(name, url string) *RedocOpts {
 	return redoc
 }
 
-// Serve - the HandlerFunc for Redoc
+// Serve is the HandlerFunc for Redoc
 func (redoc *RedocOpts) Serve(w http.ResponseWriter, r *http.Request, pathParams map[string]string) {
 
 	redoc.ensureDefaults()
