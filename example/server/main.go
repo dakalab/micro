@@ -73,10 +73,10 @@ func main() {
 		Server 1: insecure server
 	***********************************************************************************************/
 	s := micro.NewService(
-		micro.Debug(true),
 		micro.RouteOpt(route),
 		micro.ShutdownFunc(sf),
 		micro.Redoc(redoc),
+		micro.WithLogger(micro.LoggerFunc(log.Printf)),
 	)
 	proto.RegisterGreeterServer(s.GRPCServer, &Greeter{})
 
@@ -96,12 +96,12 @@ func main() {
 	}
 
 	s2 := micro.NewService(
-		micro.Debug(true),
 		micro.RouteOpt(route),
 		micro.ShutdownFunc(sf),
 		micro.Redoc(redoc),
 		micro.GRPCServerOption(grpc.Creds(serverCreds)),
 		micro.GRPCDialOption(grpc.WithTransportCredentials(clientCreds)),
+		micro.WithLogger(micro.LoggerFunc(log.Printf)),
 	)
 	proto.RegisterGreeterServer(s2.GRPCServer, &Greeter{})
 
@@ -140,12 +140,12 @@ func main() {
 	})
 
 	s3 := micro.NewService(
-		micro.Debug(true),
 		micro.RouteOpt(route),
 		micro.ShutdownFunc(sf),
 		micro.Redoc(redoc),
 		micro.GRPCServerOption(grpc.Creds(serverCreds2)),
 		micro.GRPCDialOption(grpc.WithTransportCredentials(clientCreds2)),
+		micro.WithLogger(micro.LoggerFunc(log.Printf)),
 	)
 	proto.RegisterGreeterServer(s3.GRPCServer, &Greeter{})
 

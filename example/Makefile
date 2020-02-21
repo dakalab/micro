@@ -1,7 +1,7 @@
 .PHONY: all
 all: help
 
-GOLANG_IMG=quay.io/hyper/go:1.13
+GOLANG_IMG=hyperjiang/golang:1.13.5
 
 .PHONY: help
 help:
