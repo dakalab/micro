@@ -4,16 +4,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"net"
 	"net/http"
-	"net/http/httptest"
 	"syscall"
 	"testing"
 	"time"
 
 	"github.com/grpc-ecosystem/grpc-gateway/runtime"
-	opentracing "github.com/opentracing/opentracing-go"
 	"github.com/stretchr/testify/assert"
 	"google.golang.org/grpc"
 )
@@ -42,11 +39,6 @@ func init() {
 
 func TestNewService(t *testing.T) {
 
-	closer, _ := InitJaeger("micro", "localhost:6831", "localhost:6831", true)
-	if closer != nil {
-		defer closer.Close()
-	}
-
 	redoc := &RedocOpts{
 		Route: "docs",
 		Up:    true,
@@ -64,7 +56,6 @@ func TestNewService(t *testing.T) {
 
 	s := NewService(
 		Redoc(redoc),
-		Debug(true),
 		RouteOpt(route),
 		ShutdownFunc(shutdownFunc),
 		PreShutdownDelay(0),
@@ -92,62 +83,28 @@ func TestNewService(t *testing.T) {
 	// check if the http endpoint works
 	client := &http.Client{}
 	resp, err := client.Get(fmt.Sprintf("http://127.0.0.1:%d/", httpPort))
-	if err != nil {
-		t.Error(err)
-	}
+	assert.NoError(t, err)
 	assert.Equal(t, http.StatusNotFound, resp.StatusCode)
-	assert.Len(t, resp.Header.Get("X-Request-Id"), 36)
-
-	client = &http.Client{}
-	resp, err = client.Get(fmt.Sprintf("http://127.0.0.1:%d/fake.swagger.json", httpPort))
-	if err != nil {
-		t.Error(err)
-	}
-	assert.Equal(t, http.StatusNotFound, resp.StatusCode)
-	assert.Len(t, resp.Header.Get("X-Request-Id"), 36)
 
 	client = &http.Client{}
 	resp, err = client.Get(fmt.Sprintf("http://127.0.0.1:%d/demo.swagger.json", httpPort))
-	if err != nil {
-		t.Error(err)
-	}
+	assert.NoError(t, err)
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
-	assert.Len(t, resp.Header.Get("X-Request-Id"), 36)
+
+	client = &http.Client{}
+	resp, err = client.Get(fmt.Sprintf("http://127.0.0.1:%d/fake.swagger.json", httpPort))
+	assert.NoError(t, err)
+	assert.Equal(t, http.StatusNotFound, resp.StatusCode)
 
 	resp, err = client.Get(fmt.Sprintf("http://127.0.0.1:%d/docs", httpPort))
 	if err != nil {
 		t.Error(err)
 	}
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
-	assert.Len(t, resp.Header.Get("X-Request-Id"), 36)
 
 	resp, err = client.Get(fmt.Sprintf("http://127.0.0.1:%d/metrics", httpPort))
-	if err != nil {
-		t.Error(err)
-	}
+	assert.NoError(t, err)
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
-	assert.Len(t, resp.Header.Get("X-Request-Id"), 36)
-
-	// create a root span and set uber-trace-id in header
-	rootSpan := opentracing.StartSpan("root")
-	client = &http.Client{}
-	req, err := http.NewRequest("GET", fmt.Sprintf("http://127.0.0.1:%d/test", httpPort), nil)
-	if err != nil {
-		t.Error(err)
-	}
-	footprint := "1234567890"
-	req.Header.Set("uber-trace-id", fmt.Sprintf("%+v", rootSpan))
-	req.Header.Set("uberctx-footprint", footprint)
-	resp, err = client.Do(req)
-	if err != nil {
-		t.Error(err)
-	}
-	defer resp.Body.Close()
-	body, _ := ioutil.ReadAll(resp.Body)
-	assert.Equal(t, http.StatusOK, resp.StatusCode)
-	assert.Equal(t, footprint, resp.Header.Get("X-Request-Id"))
-	assert.Equal(t, "Hello!", string(body))
-	rootSpan.Finish()
 
 	// create service s2 to trigger errChan1
 	s2 := NewService(
@@ -199,11 +156,8 @@ func TestNewService(t *testing.T) {
 
 	// the redoc is not up for the second server
 	resp, err = client.Get(fmt.Sprintf("http://127.0.0.1:%d/docs", httpPort))
-	if err != nil {
-		t.Error(err)
-	}
+	assert.NoError(t, err)
 	assert.Equal(t, http.StatusNotFound, resp.StatusCode)
-	assert.Len(t, resp.Header.Get("X-Request-Id"), 36)
 
 	// send an interrupt signal to stop s4
 	syscall.Kill(s4.Getpid(), syscall.SIGINT)
@@ -232,18 +186,4 @@ func TestErrorReverseProxyFunc(t *testing.T) {
 
 	err := s.startGRPCGateway(httpPort, grpcPort, reverseProxyFunc)
 	assert.EqualError(t, err, errText)
-}
-
-func TestDefaultAnnotator(t *testing.T) {
-	span := opentracing.StartSpan("root")
-	ctx := opentracing.ContextWithSpan(context.TODO(), span)
-
-	req := httptest.NewRequest("GET", "/", nil)
-	req.Header.Set("X-Request-Id", "uuid")
-
-	md := DefaultAnnotator(ctx, req)
-	id, ok := md["x-request-id"]
-
-	assert.True(t, ok)
-	assert.Equal(t, "uuid", id[0])
 }
