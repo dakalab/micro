@@ -4,10 +4,11 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestRedoc(t *testing.T) {
+	var should = require.New(t)
 
 	req := httptest.NewRequest("GET", "/docs", nil)
 	recorder := httptest.NewRecorder()
@@ -15,12 +16,13 @@ func TestRedoc(t *testing.T) {
 
 	redoc.Serve(recorder, req, map[string]string{})
 
-	assert.Equal(t, 200, recorder.Code)
-	assert.Equal(t, "text/html; charset=utf-8", recorder.Header().Get("Content-Type"))
-	assert.Contains(t, recorder.Body.String(), "<title>API documentation</title>")
+	should.Equal(200, recorder.Code)
+	should.Equal("text/html; charset=utf-8", recorder.Header().Get("Content-Type"))
+	should.Contains(recorder.Body.String(), "<title>API documentation</title>")
 }
 
 func TestRedoc2(t *testing.T) {
+	var should = require.New(t)
 
 	req := httptest.NewRequest("GET", "/docs", nil)
 	recorder := httptest.NewRecorder()
@@ -32,8 +34,8 @@ func TestRedoc2(t *testing.T) {
 
 	redoc.Serve(recorder, req, map[string]string{})
 
-	assert.Equal(t, 200, recorder.Code)
-	assert.Equal(t, "text/html; charset=utf-8", recorder.Header().Get("Content-Type"))
-	assert.Contains(t, recorder.Body.String(), "<title>API documentation</title>")
-	assert.Contains(t, recorder.Body.String(), "Google Calendar")
+	should.Equal(200, recorder.Code)
+	should.Equal("text/html; charset=utf-8", recorder.Header().Get("Content-Type"))
+	should.Contains(recorder.Body.String(), "<title>API documentation</title>")
+	should.Contains(recorder.Body.String(), "Google Calendar")
 }

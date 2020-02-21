@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"github.com/grpc-ecosystem/grpc-gateway/runtime"
-	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
 )
 
@@ -38,6 +38,7 @@ func init() {
 }
 
 func TestNewService(t *testing.T) {
+	var should = require.New(t)
 
 	redoc := &RedocOpts{
 		Route: "docs",
@@ -62,9 +63,8 @@ func TestNewService(t *testing.T) {
 	)
 
 	go func() {
-		if err := s.Start(httpPort, grpcPort, reverseProxyFunc); err != nil {
-			t.Errorf("failed to serve: %v", err)
-		}
+		err := s.Start(httpPort, grpcPort, reverseProxyFunc)
+		should.NoError(err)
 	}()
 
 	// wait 1 second for the server start
@@ -73,38 +73,38 @@ func TestNewService(t *testing.T) {
 	// check if the http server is up
 	httpHost := fmt.Sprintf(":%d", httpPort)
 	_, err := net.Listen("tcp", httpHost)
-	assert.Error(t, err)
+	should.Error(err)
 
 	// check if the grpc server is up
 	grpcHost := fmt.Sprintf(":%d", grpcPort)
 	_, err = net.Listen("tcp", grpcHost)
-	assert.Error(t, err)
+	should.Error(err)
 
 	// check if the http endpoint works
 	client := &http.Client{}
 	resp, err := client.Get(fmt.Sprintf("http://127.0.0.1:%d/", httpPort))
-	assert.NoError(t, err)
-	assert.Equal(t, http.StatusNotFound, resp.StatusCode)
+	should.NoError(err)
+	should.Equal(http.StatusNotFound, resp.StatusCode)
 
 	client = &http.Client{}
 	resp, err = client.Get(fmt.Sprintf("http://127.0.0.1:%d/demo.swagger.json", httpPort))
-	assert.NoError(t, err)
-	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	should.NoError(err)
+	should.Equal(http.StatusOK, resp.StatusCode)
 
 	client = &http.Client{}
 	resp, err = client.Get(fmt.Sprintf("http://127.0.0.1:%d/fake.swagger.json", httpPort))
-	assert.NoError(t, err)
-	assert.Equal(t, http.StatusNotFound, resp.StatusCode)
+	should.NoError(err)
+	should.Equal(http.StatusNotFound, resp.StatusCode)
 
 	resp, err = client.Get(fmt.Sprintf("http://127.0.0.1:%d/docs", httpPort))
 	if err != nil {
 		t.Error(err)
 	}
-	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	should.Equal(http.StatusOK, resp.StatusCode)
 
 	resp, err = client.Get(fmt.Sprintf("http://127.0.0.1:%d/metrics", httpPort))
-	assert.NoError(t, err)
-	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	should.NoError(err)
+	should.Equal(http.StatusOK, resp.StatusCode)
 
 	// create service s2 to trigger errChan1
 	s2 := NewService(
@@ -115,7 +115,7 @@ func TestNewService(t *testing.T) {
 
 	// grpc port 9999 alreday in use
 	err = s2.Start(httpPort, grpcPort, reverseProxyFunc)
-	assert.Error(t, err)
+	should.Error(err)
 
 	// create service s3 to trigger errChan2
 	s3 := NewService(
@@ -127,7 +127,7 @@ func TestNewService(t *testing.T) {
 	// http port 8888 already in use
 	s.GRPCServer.Stop()
 	err = s3.Start(httpPort, grpcPort, reverseProxyFunc)
-	assert.Error(t, err)
+	should.Error(err)
 
 	// wait 1 second for s3 gRPC server start
 	time.Sleep(1 * time.Second)
@@ -146,9 +146,8 @@ func TestNewService(t *testing.T) {
 		ShutdownTimeout(10*time.Second),
 	)
 	go func() {
-		if err := s4.Start(httpPort, grpcPort, reverseProxyFunc); err != nil {
-			t.Errorf("failed to serve: %v", err)
-		}
+		err := s4.Start(httpPort, grpcPort, reverseProxyFunc)
+		should.NoError(err)
 	}()
 
 	// wait 1 second for the server start
@@ -156,8 +155,8 @@ func TestNewService(t *testing.T) {
 
 	// the redoc is not up for the second server
 	resp, err = client.Get(fmt.Sprintf("http://127.0.0.1:%d/docs", httpPort))
-	assert.NoError(t, err)
-	assert.Equal(t, http.StatusNotFound, resp.StatusCode)
+	should.NoError(err)
+	should.Equal(http.StatusNotFound, resp.StatusCode)
 
 	// send an interrupt signal to stop s4
 	syscall.Kill(s4.Getpid(), syscall.SIGINT)
@@ -167,6 +166,8 @@ func TestNewService(t *testing.T) {
 }
 
 func TestErrorReverseProxyFunc(t *testing.T) {
+	var should = require.New(t)
+
 	s := NewService(
 		Redoc(&RedocOpts{
 			Up: true,
@@ -185,5 +186,5 @@ func TestErrorReverseProxyFunc(t *testing.T) {
 	}
 
 	err := s.startGRPCGateway(httpPort, grpcPort, reverseProxyFunc)
-	assert.EqualError(t, err, errText)
+	should.EqualError(err, errText)
 }
