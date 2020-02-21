@@ -5,7 +5,7 @@ import (
 	"syscall"
 )
 
-// InterruptSignals are the interrupt signals to catch
+// InterruptSignals are the default interrupt signals to catch
 var InterruptSignals = []os.Signal{
 	syscall.SIGSTOP,
 	syscall.SIGINT,

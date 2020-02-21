@@ -41,6 +41,7 @@ type Service struct {
 	interruptSignals   []os.Signal
 	grpcServerOptions  []grpc.ServerOption
 	grpcDialOptions    []grpc.DialOption
+	logger             Logger
 }
 
 const (
@@ -76,6 +77,7 @@ func defaultService() *Service {
 	s.shutdownFunc = func() {}
 	s.shutdownTimeout = defaultShutdownTimeout
 	s.preShutdownDelay = defaultPreShutdownDelay
+	s.logger = dummyLogger
 
 	s.redoc = &RedocOpts{
 		Up: false,
@@ -167,13 +169,13 @@ func (s *Service) Start(httpPort uint16, grpcPort uint16, reverseProxyFunc Rever
 
 	// start gRPC server
 	go func() {
-		Logger().Infof("Starting gPRC server listening on %d", grpcPort)
+		s.logger.Printf("Starting gPRC server listening on %d", grpcPort)
 		errChan1 <- s.startGRPCServer(grpcPort)
 	}()
 
 	// start HTTP/1.0 gateway server
 	go func() {
-		Logger().Infof("Starting http server listening on %d", httpPort)
+		s.logger.Printf("Starting http server listening on %d", httpPort)
 		errChan2 <- s.startGRPCGateway(httpPort, grpcPort, reverseProxyFunc)
 	}()
 
@@ -189,7 +191,7 @@ func (s *Service) Start(httpPort uint16, grpcPort uint16, reverseProxyFunc Rever
 
 	// if we received an interrupt signal
 	case sig := <-sigChan:
-		Logger().Infof("Interrupt signal received: %v", sig)
+		s.logger.Printf("Interrupt signal received: %v", sig)
 		s.Stop()
 		return nil
 	}
@@ -263,7 +265,7 @@ func (s *Service) Stop() {
 
 	// we wait for a duration of preShutdownDelay for running goroutines to finish their jobs
 	if s.preShutdownDelay > 0 {
-		Logger().Infof("Waiting for %v before shutdown starts", s.preShutdownDelay)
+		s.logger.Printf("Waiting for %v before shutdown starts", s.preShutdownDelay)
 		time.Sleep(s.preShutdownDelay)
 	}
 

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
 	"net"
 	"net/http"
 	"syscall"
@@ -60,6 +61,7 @@ func TestNewService(t *testing.T) {
 		RouteOpt(route),
 		ShutdownFunc(shutdownFunc),
 		PreShutdownDelay(0),
+		WithLogger(LoggerFunc(log.Printf)),
 	)
 
 	go func() {
@@ -86,12 +88,10 @@ func TestNewService(t *testing.T) {
 	should.NoError(err)
 	should.Equal(http.StatusNotFound, resp.StatusCode)
 
-	client = &http.Client{}
 	resp, err = client.Get(fmt.Sprintf("http://127.0.0.1:%d/demo.swagger.json", httpPort))
 	should.NoError(err)
 	should.Equal(http.StatusOK, resp.StatusCode)
 
-	client = &http.Client{}
 	resp, err = client.Get(fmt.Sprintf("http://127.0.0.1:%d/fake.swagger.json", httpPort))
 	should.NoError(err)
 	should.Equal(http.StatusNotFound, resp.StatusCode)

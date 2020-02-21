@@ -129,6 +129,13 @@ func WithHTTPServer(server *http.Server) Option {
 	}
 }
 
+// WithLogger uses the provided logger
+func WithLogger(logger Logger) Option {
+	return func(s *Service) {
+		s.logger = logger
+	}
+}
+
 func (s *Service) apply(opts ...Option) {
 	for _, opt := range opts {
 		opt(s)
