@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io/ioutil"
 	"log"
 	"net"
 	"net/http"
@@ -64,6 +65,17 @@ func TestNewService(t *testing.T) {
 		WithLogger(LoggerFunc(log.Printf)),
 	)
 
+	newRoute := Route{
+		Method:  "GET",
+		Pattern: PathPattern("health"),
+		Handler: func(w http.ResponseWriter, r *http.Request, pathParams map[string]string) {
+			w.Header().Set("Content-Type", "text/html; charset=utf-8")
+			w.WriteHeader(http.StatusOK)
+			w.Write([]byte("OK"))
+		},
+	}
+	s.AddRoutes(newRoute)
+
 	go func() {
 		err := s.Start(httpPort, grpcPort, reverseProxyFunc)
 		should.NoError(err)
@@ -87,6 +99,13 @@ func TestNewService(t *testing.T) {
 	resp, err := client.Get(fmt.Sprintf("http://127.0.0.1:%d/", httpPort))
 	should.NoError(err)
 	should.Equal(http.StatusNotFound, resp.StatusCode)
+
+	resp, err = client.Get(fmt.Sprintf("http://127.0.0.1:%d/health", httpPort))
+	should.NoError(err)
+	should.Equal(http.StatusOK, resp.StatusCode)
+	b, err := ioutil.ReadAll(resp.Body)
+	should.NoError(err)
+	should.Equal("OK", string(b))
 
 	resp, err = client.Get(fmt.Sprintf("http://127.0.0.1:%d/demo.swagger.json", httpPort))
 	should.NoError(err)

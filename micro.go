@@ -281,3 +281,8 @@ func (s *Service) Stop() {
 	// gracefully stop http server
 	s.HTTPServer.Shutdown(ctx)
 }
+
+// AddRoutes adds additional routes
+func (s *Service) AddRoutes(routes ...Route) {
+	s.routes = append(s.routes, routes...)
+}
