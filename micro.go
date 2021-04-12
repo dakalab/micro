@@ -14,7 +14,7 @@ import (
 	grpc_recovery "github.com/grpc-ecosystem/go-grpc-middleware/recovery"
 	grpc_validator "github.com/grpc-ecosystem/go-grpc-middleware/validator"
 	grpc_prometheus "github.com/grpc-ecosystem/go-grpc-prometheus"
-	"github.com/grpc-ecosystem/grpc-gateway/runtime"
+	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
@@ -26,7 +26,7 @@ type Service struct {
 	GRPCServer         *grpc.Server
 	HTTPServer         *http.Server
 	httpHandler        HTTPHandlerFunc
-	errorHandler       runtime.ProtoErrorHandlerFunc
+	errorHandler       runtime.ErrorHandlerFunc
 	annotators         []AnnotatorFunc
 	redoc              *RedocOpts
 	staticDir          string
@@ -60,9 +60,6 @@ type HTTPHandlerFunc func(*runtime.ServeMux) http.Handler
 // AnnotatorFunc is the annotator function is for injecting meta data from http request into gRPC context
 type AnnotatorFunc func(context.Context, *http.Request) metadata.MD
 
-// refer: https://github.com/grpc-ecosystem/grpc-gateway/blob/master/docs/_docs/customizingyourgateway.md
-var defaultMuxOption = runtime.WithMarshalerOption(runtime.MIMEWildcard, &runtime.JSONPb{EmitDefaults: true})
-
 // DefaultHTTPHandler is the default http handler which does nothing
 func DefaultHTTPHandler(mux *runtime.ServeMux) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -73,7 +70,7 @@ func DefaultHTTPHandler(mux *runtime.ServeMux) http.Handler {
 func defaultService() *Service {
 	s := Service{}
 	s.httpHandler = DefaultHTTPHandler
-	s.errorHandler = runtime.DefaultHTTPError
+	s.errorHandler = runtime.DefaultHTTPErrorHandler
 	s.shutdownFunc = func() {}
 	s.shutdownTimeout = defaultShutdownTimeout
 	s.preShutdownDelay = defaultPreShutdownDelay
@@ -101,13 +98,10 @@ func defaultService() *Service {
 	s.streamInterceptors = append(s.streamInterceptors, grpc_recovery.StreamServerInterceptor())
 	s.unaryInterceptors = append(s.unaryInterceptors, grpc_recovery.UnaryServerInterceptor())
 
-	// apply default marshaler option for mux, can be replaced by using MuxOption
-	s.muxOptions = append(s.muxOptions, defaultMuxOption)
-
 	// add /metrics HTTP/1 endpoint
 	routeMetrics := Route{
-		Method:  "GET",
-		Pattern: PathPattern("metrics"),
+		Method: "GET",
+		Path:   "/metrics",
 		Handler: func(w http.ResponseWriter, r *http.Request, pathParams map[string]string) {
 			promhttp.Handler().ServeHTTP(w, r)
 		},
@@ -129,7 +123,7 @@ func NewService(opts ...Option) *Service {
 	}
 
 	// init gateway mux
-	s.muxOptions = append(s.muxOptions, runtime.WithProtoErrorHandler(s.errorHandler))
+	s.muxOptions = append(s.muxOptions, runtime.WithErrorHandler(s.errorHandler))
 
 	for _, annotator := range s.annotators {
 		s.muxOptions = append(s.muxOptions, runtime.WithMetadata(annotator))
@@ -214,18 +208,13 @@ func (s *Service) startGRPCGateway(httpPort uint16, grpcPort uint16, reverseProx
 	if s.redoc.Up {
 		// add redoc endpoint for api docs
 		routeDocs := Route{
-			Method:  "GET",
-			Pattern: PathPattern(s.redoc.Route),
+			Method: "GET",
+			Path:   s.redoc.Route,
 			Handler: func(w http.ResponseWriter, r *http.Request, pathParams map[string]string) {
 				s.redoc.Serve(w, r, pathParams)
 			},
 		}
 		s.routes = append(s.routes, routeDocs)
-	}
-
-	// apply routes
-	for _, route := range s.routes {
-		s.mux.Handle(route.Method, route.Pattern, route.Handler)
 	}
 
 	err := reverseProxyFunc(context.Background(), s.mux, fmt.Sprintf("localhost:%d", grpcPort), s.grpcDialOptions)
@@ -250,6 +239,11 @@ func (s *Service) startGRPCGateway(httpPort uint16, grpcPort uint16, reverseProx
 
 		http.ServeFile(w, r, path)
 	})
+
+	// apply routes
+	for _, route := range s.routes {
+		s.mux.HandlePath(route.Method, route.Path, route.Handler)
+	}
 
 	s.HTTPServer.Addr = fmt.Sprintf(":%d", httpPort)
 	s.HTTPServer.Handler = s.httpHandler(s.mux)

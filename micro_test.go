@@ -12,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/grpc-ecosystem/grpc-gateway/runtime"
+	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
 )
@@ -43,15 +43,15 @@ func TestNewService(t *testing.T) {
 	var should = require.New(t)
 
 	redoc := &RedocOpts{
-		Route: "docs",
+		Route: "/docs",
 		Up:    true,
 	}
 	redoc.AddSpec("PetStore", "https://rebilly.github.io/ReDoc/swagger.yaml")
 
 	// add the /test endpoint
 	route := Route{
-		Method:  "GET",
-		Pattern: PathPattern("test"),
+		Method: "GET",
+		Path:   "/test",
 		Handler: func(w http.ResponseWriter, r *http.Request, pathParams map[string]string) {
 			w.Write([]byte("Hello!"))
 		},
@@ -66,8 +66,8 @@ func TestNewService(t *testing.T) {
 	)
 
 	newRoute := Route{
-		Method:  "GET",
-		Pattern: PathPattern("health"),
+		Method: "GET",
+		Path:   "/health",
 		Handler: func(w http.ResponseWriter, r *http.Request, pathParams map[string]string) {
 			w.Header().Set("Content-Type", "text/html; charset=utf-8")
 			w.WriteHeader(http.StatusOK)

@@ -8,4 +8,4 @@
 
 Microservice prototype with gRPC + Restful + Redoc + Prometheus.
 
-*Require GO version >= v1.11*
+*Require GO version >= v1.13*
