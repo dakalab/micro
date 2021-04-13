@@ -3,10 +3,10 @@ syntax = "proto3";
 package helloworld;
 
 import "google/api/annotations.proto";
-import "protoc-gen-swagger/options/annotations.proto";
+import "protoc-gen-openapiv2/options/annotations.proto";
 
-option go_package = "proto";
-option (grpc.gateway.protoc_gen_swagger.options.openapiv2_swagger) = {
+option go_package = "github.com/dakalab/micro/example/v2/proto;proto";
+option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_swagger) = {
   info: {
     title: "Demo gPRC service";
     version: "v0.0.1";

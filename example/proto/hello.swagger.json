@@ -4,9 +4,10 @@
     "title": "Demo gPRC service",
     "version": "v0.0.1"
   },
-  "schemes": [
-    "http",
-    "https"
+  "tags": [
+    {
+      "name": "Greeter"
+    }
   ],
   "consumes": [
     "application/json"
@@ -18,12 +19,18 @@
     "/hello": {
       "get": {
         "summary": "Sends a greeting",
-        "operationId": "SayHello",
+        "operationId": "Greeter_SayHello",
         "responses": {
           "200": {
             "description": "A successful response.",
             "schema": {
               "$ref": "#/definitions/helloworldHelloResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
             }
           }
         },
@@ -47,6 +54,36 @@
       "properties": {
         "message": {
           "type": "string"
+        }
+      }
+    },
+    "protobufAny": {
+      "type": "object",
+      "properties": {
+        "typeUrl": {
+          "type": "string"
+        },
+        "value": {
+          "type": "string",
+          "format": "byte"
+        }
+      }
+    },
+    "rpcStatus": {
+      "type": "object",
+      "properties": {
+        "code": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "message": {
+          "type": "string"
+        },
+        "details": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/protobufAny"
+          }
         }
       }
     }

@@ -1,0 +1,17 @@
+version: v1beta1
+name: buf.build/dakalab/micro
+build:
+  roots:
+    - proto
+lint:
+  use:
+    - BASIC
+  except:
+    - ENUM_NO_ALLOW_ALIAS
+    - IMPORT_NO_PUBLIC
+    - PACKAGE_AFFINITY
+    - PACKAGE_DIRECTORY_MATCH
+    - PACKAGE_SAME_DIRECTORY
+deps:
+  - buf.build/beta/googleapis
+  - buf.build/grpc-ecosystem/grpc-gateway

@@ -8,9 +8,9 @@ import (
 	"log"
 	"net/http"
 
-	"github.com/dakalab/micro"
 	"github.com/dakalab/micro/example/proto"
-	"github.com/grpc-ecosystem/grpc-gateway/runtime"
+	"github.com/dakalab/micro/v2"
+	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 )
@@ -51,8 +51,8 @@ func main() {
 
 	// add swagger definition endpoint
 	route := micro.Route{
-		Method:  "GET",
-		Pattern: micro.PathPattern("hello.swagger.json"),
+		Method: "GET",
+		Path:   "/hello.swagger.json",
 		Handler: func(w http.ResponseWriter, r *http.Request, pathParams map[string]string) {
 			data, _ := ioutil.ReadFile("proto/hello.swagger.json")
 			w.Write(data)
