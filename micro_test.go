@@ -65,7 +65,8 @@ func TestNewService(t *testing.T) {
 		WithLogger(LoggerFunc(log.Printf)),
 	)
 
-	newRoute := Route{
+	// add the /health endpoint
+	healthRoute := Route{
 		Method: "GET",
 		Path:   "/health",
 		Handler: func(w http.ResponseWriter, r *http.Request, pathParams map[string]string) {
@@ -74,7 +75,22 @@ func TestNewService(t *testing.T) {
 			w.Write([]byte("OK"))
 		},
 	}
-	s.AddRoutes(newRoute)
+	s.AddRoutes(healthRoute)
+
+	// add demo.swagger.json
+	fileRoute := Route{
+		Method:  "GET",
+		Path:    "/demo.swagger.json",
+		Handler: s.ServeFile,
+	}
+	s.AddRoutes(fileRoute)
+
+	noRoute := Route{
+		Method:  "GET",
+		Path:    "/404",
+		Handler: s.ServeFile,
+	}
+	s.AddRoutes(noRoute)
 
 	go func() {
 		err := s.Start(httpPort, grpcPort, reverseProxyFunc)
@@ -111,7 +127,7 @@ func TestNewService(t *testing.T) {
 	should.NoError(err)
 	should.Equal(http.StatusOK, resp.StatusCode)
 
-	resp, err = client.Get(fmt.Sprintf("http://127.0.0.1:%d/fake.swagger.json", httpPort))
+	resp, err = client.Get(fmt.Sprintf("http://127.0.0.1:%d/404", httpPort))
 	should.NoError(err)
 	should.Equal(http.StatusNotFound, resp.StatusCode)
 

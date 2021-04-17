@@ -222,24 +222,6 @@ func (s *Service) startGRPCGateway(httpPort uint, grpcPort uint, reverseProxyFun
 		return err
 	}
 
-	// this is the fallback handler that will serve static files,
-	// if file does not exist, then a 404 error will be returned.
-	s.mux.Handle("GET", AllPattern(), func(w http.ResponseWriter, r *http.Request, pathParams map[string]string) {
-		dir := s.staticDir
-		if s.staticDir == "" {
-			dir, _ = os.Getwd()
-		}
-
-		// check if the file exists and fobid showing directory
-		path := filepath.Join(dir, r.URL.Path)
-		if fileInfo, err := os.Stat(path); os.IsNotExist(err) || fileInfo.IsDir() {
-			http.NotFound(w, r)
-			return
-		}
-
-		http.ServeFile(w, r, path)
-	})
-
 	// apply routes
 	for _, route := range s.routes {
 		s.mux.HandlePath(route.Method, route.Path, route.Handler)
@@ -279,4 +261,21 @@ func (s *Service) Stop() {
 // AddRoutes adds additional routes
 func (s *Service) AddRoutes(routes ...Route) {
 	s.routes = append(s.routes, routes...)
+}
+
+// ServeFile serves a file
+func (s *Service) ServeFile(w http.ResponseWriter, r *http.Request, pathParams map[string]string) {
+	dir := s.staticDir
+	if s.staticDir == "" {
+		dir, _ = os.Getwd()
+	}
+
+	// check if the file exists and fobid showing directory
+	path := filepath.Join(dir, r.URL.Path)
+	if fileInfo, err := os.Stat(path); os.IsNotExist(err) || fileInfo.IsDir() {
+		http.NotFound(w, r)
+		return
+	}
+
+	http.ServeFile(w, r, path)
 }

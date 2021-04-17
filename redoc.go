@@ -8,7 +8,7 @@ import (
 
 // RedocOpts is configures for redoc
 type RedocOpts struct {
-	// Route is the route in http server, DO NOT include / at the beginning
+	// Route is the route in http server, should include / at the beginning
 	Route string
 	// SpecURLs are the urls to find the spec for, format: name -> url
 	SpecURLs map[string]string
