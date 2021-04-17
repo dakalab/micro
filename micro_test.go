@@ -18,7 +18,7 @@ import (
 )
 
 var reverseProxyFunc ReverseProxyFunc
-var httpPort, grpcPort uint16
+var httpPort, grpcPort uint
 var shutdownFunc func()
 
 func init() {

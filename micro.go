@@ -151,7 +151,7 @@ func (s *Service) Getpid() int {
 }
 
 // Start starts the microservice with listening on the ports
-func (s *Service) Start(httpPort uint16, grpcPort uint16, reverseProxyFunc ReverseProxyFunc) error {
+func (s *Service) Start(httpPort uint, grpcPort uint, reverseProxyFunc ReverseProxyFunc) error {
 
 	// intercept interrupt signals
 	sigChan := make(chan os.Signal, 1)
@@ -191,7 +191,7 @@ func (s *Service) Start(httpPort uint16, grpcPort uint16, reverseProxyFunc Rever
 	}
 }
 
-func (s *Service) startGRPCServer(grpcPort uint16) error {
+func (s *Service) startGRPCServer(grpcPort uint) error {
 	// register reflection service on gRPC server.
 	reflection.Register(s.GRPCServer)
 
@@ -204,7 +204,7 @@ func (s *Service) startGRPCServer(grpcPort uint16) error {
 	return s.GRPCServer.Serve(lis)
 }
 
-func (s *Service) startGRPCGateway(httpPort uint16, grpcPort uint16, reverseProxyFunc ReverseProxyFunc) error {
+func (s *Service) startGRPCGateway(httpPort uint, grpcPort uint, reverseProxyFunc ReverseProxyFunc) error {
 	if s.redoc.Up {
 		// add redoc endpoint for api docs
 		routeDocs := Route{
