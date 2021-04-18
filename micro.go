@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strings"
 	"time"
 
 	grpc_middleware "github.com/grpc-ecosystem/go-grpc-middleware"
@@ -214,7 +215,19 @@ func (s *Service) startGRPCGateway(httpPort uint, grpcPort uint, reverseProxyFun
 				s.redoc.Serve(w, r, pathParams)
 			},
 		}
-		s.routes = append(s.routes, routeDocs)
+		s.AddRoutes(routeDocs)
+
+		// host local spec files
+		for _, url := range s.redoc.SpecURLs {
+			if strings.HasPrefix(url, "/") {
+				fileRoute := Route{
+					Method:  "GET",
+					Path:    url,
+					Handler: s.ServeFile,
+				}
+				s.AddRoutes(fileRoute)
+			}
+		}
 	}
 
 	err := reverseProxyFunc(context.Background(), s.mux, fmt.Sprintf("localhost:%d", grpcPort), s.grpcDialOptions)

@@ -47,6 +47,7 @@ func TestNewService(t *testing.T) {
 		Up:    true,
 	}
 	redoc.AddSpec("PetStore", "https://rebilly.github.io/ReDoc/swagger.yaml")
+	redoc.AddSpec("Service", "/demo.swagger.json")
 
 	// add the /test endpoint
 	route := Route{
@@ -76,14 +77,6 @@ func TestNewService(t *testing.T) {
 		},
 	}
 	s.AddRoutes(healthRoute)
-
-	// add demo.swagger.json
-	fileRoute := Route{
-		Method:  "GET",
-		Path:    "/demo.swagger.json",
-		Handler: s.ServeFile,
-	}
-	s.AddRoutes(fileRoute)
 
 	noRoute := Route{
 		Method:  "GET",
