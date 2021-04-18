@@ -65,8 +65,7 @@ func main() {
 
 	// init redoc, enable api docs on http://localhost:8888/docs
 	redoc := &micro.RedocOpts{
-		Up:    true,
-		Route: "/docs",
+		Up: true,
 	}
 	redoc.AddSpec("Greeter", "/hello.swagger.json")
 
