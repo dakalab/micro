@@ -48,6 +48,7 @@ func TestNewService(t *testing.T) {
 	}
 	redoc.AddSpec("PetStore", "https://rebilly.github.io/ReDoc/swagger.yaml")
 	redoc.AddSpec("Service", "/demo.swagger.json")
+	redoc.AddSpec("Service2", "/demo.swagger.json") // it will not add a duplicate route
 
 	// add the /test endpoint
 	route := Route{

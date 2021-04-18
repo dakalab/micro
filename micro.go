@@ -217,7 +217,7 @@ func (s *Service) startGRPCGateway(httpPort uint, grpcPort uint, reverseProxyFun
 		}
 		s.AddRoutes(routeDocs)
 
-		// host local spec files
+		// host local spec files if not set yet
 		for _, url := range s.redoc.SpecURLs {
 			if strings.HasPrefix(url, "/") {
 				fileRoute := Route{
@@ -225,7 +225,9 @@ func (s *Service) startGRPCGateway(httpPort uint, grpcPort uint, reverseProxyFun
 					Path:    url,
 					Handler: s.ServeFile,
 				}
-				s.AddRoutes(fileRoute)
+				if !s.HasRoute(fileRoute) {
+					s.AddRoutes(fileRoute)
+				}
 			}
 		}
 	}
@@ -274,6 +276,17 @@ func (s *Service) Stop() {
 // AddRoutes adds additional routes
 func (s *Service) AddRoutes(routes ...Route) {
 	s.routes = append(s.routes, routes...)
+}
+
+// HasRoute checks if a route already exists
+func (s *Service) HasRoute(route Route) bool {
+	for _, r := range s.routes {
+		if r.Method == route.Method && r.Path == route.Path {
+			return true
+		}
+	}
+
+	return false
 }
 
 // ServeFile serves a file
