@@ -78,7 +78,6 @@ func main() {
 		micro.ShutdownFunc(sf),
 		micro.Redoc(redoc),
 		micro.WithLogger(micro.LoggerFunc(log.Printf)),
-		micro.StaticDir("proto"),
 	)
 	proto.RegisterGreeterServer(s.GRPCServer, &Greeter{})
 

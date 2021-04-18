@@ -207,6 +207,8 @@ func (s *Service) startGRPCServer(grpcPort uint) error {
 
 func (s *Service) startGRPCGateway(httpPort uint, grpcPort uint, reverseProxyFunc ReverseProxyFunc) error {
 	if s.redoc.Up {
+		s.redoc.EnsureDefaults()
+
 		// add redoc endpoint for api docs
 		routeDocs := Route{
 			Method: "GET",

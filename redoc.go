@@ -21,7 +21,8 @@ type RedocOpts struct {
 	Up bool
 }
 
-func (redoc *RedocOpts) ensureDefaults() {
+// EnsureDefaults sets default redoc options
+func (redoc *RedocOpts) EnsureDefaults() {
 	if redoc.Route == "" || redoc.Route == "/" {
 		redoc.Route = "/docs"
 	}
@@ -53,7 +54,7 @@ func (redoc *RedocOpts) AddSpec(name, url string) *RedocOpts {
 // Serve is the HandlerFunc for Redoc
 func (redoc *RedocOpts) Serve(w http.ResponseWriter, r *http.Request, pathParams map[string]string) {
 
-	redoc.ensureDefaults()
+	redoc.EnsureDefaults()
 
 	tmpl := template.Must(template.New("redoc").Parse(redocTemplate))
 
